@@ -1,0 +1,102 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Khách hàng
+model Customer {
+  id          String   @id @default(cuid())
+  maKH        String   @unique // Mã khách hàng
+  name        String
+  email       String?
+  phone       String
+  source      String   // FB, IG, Website, etc.
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  bookings    Booking[]
+}
+
+// Tour
+model Tour {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        TourType // GROUP, PRIVATE, ONE_ON_ONE
+  maxGuests   Int
+  price       Float
+  startDate   DateTime
+  endDate     DateTime
+  status      TourStatus // UPCOMING, ONGOING, COMPLETED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  bookings    Booking[]
+  expenses    Expense[]
+}
+
+// Booking
+model Booking {
+  id          String       @id @default(cuid())
+  customerId  String
+  tourId      String
+  deposit     Float
+  totalPrice  Float
+  status      BookingStatus // PENDING, CONFIRMED, CANCELLED
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  tour        Tour         @relation(fields: [tourId], references: [id])
+}
+
+// Chi phí
+model Expense {
+  id          String       @id @default(cuid())
+  tourId      String
+  type        ExpenseType  // TOUR_COST, PARTNER, GUIDE, STAFF
+  amount      Float
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  tour        Tour         @relation(fields: [tourId], references: [id])
+}
+
+// Enums
+enum TourType {
+  GROUP      // Tour ghép đoàn
+  PRIVATE    // Tour private
+  ONE_ON_ONE // Tour 1-1
+}
+
+enum TourStatus {
+  UPCOMING   // Sắp diễn ra
+  ONGOING    // Đang diễn ra
+  COMPLETED  // Hoàn thành
+}
+
+enum BookingStatus {
+  PENDING    // Chờ xác nhận
+  CONFIRMED  // Đã xác nhận
+  CANCELLED  // Đã hủy
+}
+
+enum ExpenseType {
+  TOUR_COST  // Chi phí tour
+  PARTNER    // Chi phí đối tác
+  GUIDE      // Chi phí HDV
+  STAFF      // Chi phí nhân viên
+}
