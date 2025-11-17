@@ -42,10 +42,23 @@ export default function ExpensesPage() {
       const expensesData = await expensesRes.json()
       const toursData = await toursRes.json()
 
-      setExpenses(expensesData)
-      setTours(toursData)
+      if (expensesRes.ok && Array.isArray(expensesData)) {
+        setExpenses(expensesData)
+      } else {
+        console.error('Failed to fetch expenses:', expensesData.error || 'Unknown error')
+        setExpenses([])
+      }
+
+      if (toursRes.ok && Array.isArray(toursData)) {
+        setTours(toursData)
+      } else {
+        console.error('Failed to fetch tours:', toursData.error || 'Unknown error')
+        setTours([])
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
+      setExpenses([])
+      setTours([])
     } finally {
       setLoading(false)
     }
@@ -76,13 +89,13 @@ export default function ExpensesPage() {
     }
   }
 
-  const filteredExpenses = expenses.filter(expense => {
+  const filteredExpenses = Array.isArray(expenses) ? expenses.filter(expense => {
     const matchesSearch = expense.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         expense.tour.name.toLowerCase().includes(searchTerm.toLowerCase())
+                         expense.tour?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesType = typeFilter === 'all' || expense.type === typeFilter
     const matchesTour = tourFilter === 'all' || expense.tourId === tourFilter
     return matchesSearch && matchesType && matchesTour
-  })
+  }) : []
 
   const getTypeText = (type) => {
     switch (type) {

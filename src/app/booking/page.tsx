@@ -46,11 +46,31 @@ export default function BookingPage() {
       const customersData = await customersRes.json()
       const toursData = await toursRes.json()
 
-      setBookings(bookingsData)
-      setCustomers(customersData)
-      setTours(toursData)
+      if (bookingsRes.ok && Array.isArray(bookingsData)) {
+        setBookings(bookingsData)
+      } else {
+        console.error('Failed to fetch bookings:', bookingsData.error || 'Unknown error')
+        setBookings([])
+      }
+
+      if (customersRes.ok && Array.isArray(customersData)) {
+        setCustomers(customersData)
+      } else {
+        console.error('Failed to fetch customers:', customersData.error || 'Unknown error')
+        setCustomers([])
+      }
+
+      if (toursRes.ok && Array.isArray(toursData)) {
+        setTours(toursData)
+      } else {
+        console.error('Failed to fetch tours:', toursData.error || 'Unknown error')
+        setTours([])
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
+      setBookings([])
+      setCustomers([])
+      setTours([])
     } finally {
       setLoading(false)
     }
@@ -83,13 +103,13 @@ export default function BookingPage() {
     }
   }
 
-  const filteredBookings = bookings.filter(booking => {
-    const matchesSearch = booking.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         booking.tour.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         booking.customer.maKH.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredBookings = Array.isArray(bookings) ? bookings.filter(booking => {
+    const matchesSearch = booking.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         booking.tour?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         booking.customer?.maKH?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || booking.status === statusFilter
     return matchesSearch && matchesStatus
-  })
+  }) : []
 
   const getStatusColor = (status) => {
     switch (status) {

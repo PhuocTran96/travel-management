@@ -56,7 +56,7 @@ The application uses a **custom Next.js server** ([server.ts](server.ts)) that i
 - Development uses `nodemon` to watch for changes and restart the server
 
 ### Database Architecture
-**Database:** SQLite (located at `db/custom.db`)
+**Database:** SQLite (located at `prisma/db/custom.db`)
 **ORM:** Prisma with schema at [prisma/schema.prisma](prisma/schema.prisma)
 
 **Core Models:**
@@ -114,7 +114,7 @@ When working with UI components, use the import alias `@/components/ui/...` whic
 
 ### Environment Configuration
 Database connection is configured via `DATABASE_URL` environment variable.
-Default: `file:./db/custom.db`
+Default: `file:./db/custom.db` (relative to `prisma/schema.prisma`, resolves to `prisma/db/custom.db`)
 
 ### TypeScript & Linting
 - TypeScript build errors are **ignored** during builds (`ignoreBuildErrors: true`)

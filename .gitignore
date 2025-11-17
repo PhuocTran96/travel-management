@@ -47,10 +47,8 @@ yarn-error.log*
 .claude/
 
 # Database
-/db/*.db
-/db/*.db-journal
-/db/*.db-shm
-/db/*.db-wal
+/db/
+/prisma/db/
 
 # Logs
 *.log

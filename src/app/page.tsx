@@ -29,12 +29,16 @@ export default function Home() {
     try {
       const response = await fetch('/api/dashboard')
       const data = await response.json()
-      
-      setStats(data.stats)
-      setRecentBookings(data.recentBookings)
-      setUpcomingTours(data.upcomingTours)
-      setTourStatus(data.tourStatus)
-      setRevenueByType(data.revenueByType)
+
+      if (response.ok && data.stats) {
+        setStats(data.stats)
+        setRecentBookings(data.recentBookings || [])
+        setUpcomingTours(data.upcomingTours || [])
+        setTourStatus(data.tourStatus || { upcoming: 0, ongoing: 0, completed: 0 })
+        setRevenueByType(data.revenueByType || { group: 0, private: 0, oneOnOne: 0 })
+      } else {
+        console.error('Failed to fetch dashboard data:', data.error || 'Unknown error')
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
     } finally {
@@ -90,6 +94,12 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <p className="text-muted-foreground">Đang tải dữ liệu...</p>
+          </div>
+        ) : (
+          <>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
@@ -260,6 +270,8 @@ export default function Home() {
             </Card>
           </TabsContent>
         </Tabs>
+        </>
+        )}
       </main>
     </div>
   )

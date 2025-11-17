@@ -38,9 +38,16 @@ export default function ToursPage() {
     try {
       const response = await fetch('/api/tours')
       const data = await response.json()
-      setTours(data)
+
+      if (response.ok && Array.isArray(data)) {
+        setTours(data)
+      } else {
+        console.error('Failed to fetch tours:', data.error || 'Unknown error')
+        setTours([])
+      }
     } catch (error) {
       console.error('Error fetching tours:', error)
+      setTours([])
     } finally {
       setLoading(false)
     }
@@ -93,12 +100,12 @@ export default function ToursPage() {
     }
   }
 
-  const filteredTours = tours.filter(tour => {
-    const matchesSearch = tour.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredTours = Array.isArray(tours) ? tours.filter(tour => {
+    const matchesSearch = tour.name?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || tour.status === statusFilter
     const matchesType = typeFilter === 'all' || tour.type === typeFilter
     return matchesSearch && matchesStatus && matchesType
-  })
+  }) : []
 
   const getStatusColor = (status) => {
     switch (status) {
