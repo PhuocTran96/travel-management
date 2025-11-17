@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "nodemon --exec \"npx tsx server.ts\" --watch server.ts --watch src --ext ts,tsx,js,jsx",
-    "build": "next build",
+    "build": "prisma generate && prisma db push --accept-data-loss && next build",
     "start": "tsx server.ts",
     "lint": "next lint",
     "db:push": "prisma db push",
