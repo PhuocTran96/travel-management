@@ -14,12 +14,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Hệ thống Quản lý Du lịch",
+  title: "Chân Trời Góc Bể Travel",
   description: "Hệ thống quản lý tour du lịch, booking, khách hàng và chi phí.",
   keywords: ["Du lịch", "Tour", "Booking", "Quản lý khách hàng"],
   authors: [{ name: "Travel Management Team" }],
+  icons: {
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
+  },
   openGraph: {
-    title: "Hệ thống Quản lý Du lịch",
+    title: "Chân Trời Góc Bể Travel",
     description: "Hệ thống quản lý tour du lịch, booking, khách hàng và chi phí.",
     type: "website",
   },

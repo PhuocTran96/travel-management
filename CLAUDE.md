@@ -105,9 +105,14 @@ Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for 
 
 ### Key Pages
 - `/` - Dashboard with statistics and overview
-- `/booking` - Booking management interface
-- `/tours` - Tour listing and management
+- `/tours` - Order management (Quản lý Đơn hàng) - displays all tours/bookings created
 - `/expenses` - Expense tracking
+
+**Page Branding:**
+- All pages share consistent header with logo.png (h-16), gradient green background (from-green-100 via-green-50 to-white)
+- Header includes: "Xin chào, Thanh iu dấu" greeting (gradient pink-purple, animated pulse), circular "Tạo đơn hàng" button (Plus icon), "Đăng xuất" button
+- Navigation bar with: Dashboard, Quản lý Đơn hàng, Quản lý Chi phí
+- Favicon: icon.png
 
 ## Important Notes
 
@@ -161,32 +166,53 @@ The Prisma Client is imported as `db` from `@/lib/db`.
 The [src/components/ui/create-order-dialog.tsx](src/components/ui/create-order-dialog.tsx) component implements a critical business workflow:
 
 ### Design Principles
-1. **Two-step wizard**: Customer info → Tour selection
+1. **Three-step wizard**: Customer info → Tour selection → Review
 2. **Single-column vertical layout** to prevent horizontal scroll
-3. **Deferred persistence**: Only saves to database after completing BOTH steps
-4. **Cascading dropdowns**: Tour name → Available services → Auto-filled price/notes
-5. **Simplified date picker**: 3 separate dropdowns (day/month/year) instead of full calendar
+3. **Deferred persistence**: Only saves to database after completing ALL THREE steps
+4. **Service quantity selection**: Show all services with +/- buttons and manual input for quantity
+5. **Automatic calculations**: Total price, total guests, discount, remaining balance
+6. **Simplified date picker**: 3 separate dropdowns (day/month/year) instead of full calendar
 
-### Customer Step Fields
+### Step 1: Customer Info
 - Basic: Name, Email, Phone, Source, Address
 - Enhanced: Gender (dropdown), Title (input), Country (autocomplete with all world countries), Date of Birth (3 dropdowns)
 
-### Tour Step Integration
+### Step 2: Tour Selection
 - Fetches tour catalog from `/api/tour-info` (64 pre-loaded tours/services)
-- User selects tour name → Filters available services
-- User selects service → Auto-fills price and shows notes
-- Tour type, max guests, dates configured manually
+- User selects tour name → Shows all available services for that tour
+- For each service: +/- buttons and manual input to specify quantity of guests
+- Displays running total: quantity × price for each service
+- Auto-calculates "Tổng số khách" (total guests) from sum of all service quantities
+- Auto-calculates total price from all selected services
+- Tour type, dates configured manually
+
+### Step 3: Review (Xem lại)
+**Tour Summary:**
+- Displays tour name and all selected services with quantities
+
+**Guest Information Tracking:**
+- Shows "X/Y khách đã có thông tin" (guests with details filled)
+- Leader (from step 1) is automatically counted as 1 guest with info
+- "Bổ sung thông tin" button opens nested dialog to fill details for remaining guests
+- Guest details dialog shows: Leader info (read-only), then input fields (name + phone) for each guest per service
+
+**Cost Summary (Tóm tắt chi phí):**
+- Tổng chi phí tạm tính (total cost before discount)
+- Chiết khấu (discount % - manual input)
+- Tổng sau chiết khấu (total after discount)
+- Khách đã thanh toán (amount paid - manual input with auto-formatting for numbers >1000)
+- Còn lại (remaining balance)
 
 ### Persistence Flow
 ```typescript
 handleCreateOrder():
   1. POST /api/customers (creates customer with maKH auto-generation)
-  2. POST /api/tours (creates tour)
-  3. POST /api/bookings (creates booking linking customer + tour)
+  2. POST /api/tours (creates tour with name format: "{tourName} - {service1} (x{qty1}), {service2} (x{qty2})")
+  3. POST /api/bookings (creates booking with deposit, totalPrice after discount, status)
   4. Reset form and close dialog
 ```
 
-**Critical**: Do NOT save after each step. All data must be saved atomically at the end.
+**Critical**: Do NOT save after each step. All data must be saved atomically at the end after completing all 3 steps.
 
 ## Tour Catalog System
 

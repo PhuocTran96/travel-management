@@ -5,30 +5,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Calendar, Users, Plus, Search, MapPin, DollarSign, Clock, UserCheck } from 'lucide-react'
+import { Calendar, Users, Search, MapPin, DollarSign, Clock, TrendingUp, Plus } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
 
 export default function ToursPage() {
   const [tours, setTours] = useState([])
   const [loading, setLoading] = useState(true)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
-
-  const [newTour, setNewTour] = useState({
-    name: '',
-    description: '',
-    type: 'GROUP',
-    maxGuests: 10,
-    price: 0,
-    startDate: '',
-    endDate: '',
-    status: 'UPCOMING'
-  })
+  const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchTours()
@@ -53,52 +41,6 @@ export default function ToursPage() {
     }
   }
 
-  const handleCreateTour = async () => {
-    try {
-      const response = await fetch('/api/tours', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newTour),
-      })
-
-      if (response.ok) {
-        setIsCreateDialogOpen(false)
-        setNewTour({
-          name: '',
-          description: '',
-          type: 'GROUP',
-          maxGuests: 10,
-          price: 0,
-          startDate: '',
-          endDate: '',
-          status: 'UPCOMING'
-        })
-        fetchTours()
-      }
-    } catch (error) {
-      console.error('Error creating tour:', error)
-    }
-  }
-
-  const handleUpdateTourStatus = async (tourId, newStatus) => {
-    try {
-      const response = await fetch(`/api/tours/${tourId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: newStatus }),
-      })
-
-      if (response.ok) {
-        fetchTours()
-      }
-    } catch (error) {
-      console.error('Error updating tour status:', error)
-    }
-  }
 
   const filteredTours = Array.isArray(tours) ? tours.filter(tour => {
     const matchesSearch = tour.name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -148,118 +90,61 @@ export default function ToursPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-gradient-to-r from-green-100 via-green-50 to-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-20">
             <div className="flex items-center">
-              <Button variant="ghost" onClick={() => window.history.back()}>
-                ← Quay lại
-              </Button>
-              <h1 className="ml-4 text-2xl font-bold text-gray-900">Quản lý Tour</h1>
+              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16" />
             </div>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Tạo Tour mới
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Tạo Tour mới</DialogTitle>
-                  <DialogDescription>
-                    Thêm tour mới vào hệ thống
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <Label htmlFor="name">Tên tour</Label>
-                    <Input
-                      value={newTour.name}
-                      onChange={(e) => setNewTour({...newTour, name: e.target.value})}
-                      placeholder="Nhập tên tour..."
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label htmlFor="description">Mô tả</Label>
-                    <Textarea
-                      value={newTour.description}
-                      onChange={(e) => setNewTour({...newTour, description: e.target.value})}
-                      placeholder="Mô tả chi tiết về tour..."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="type">Loại tour</Label>
-                    <Select value={newTour.type} onValueChange={(value) => setNewTour({...newTour, type: value})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="GROUP">Tour ghép đoàn</SelectItem>
-                        <SelectItem value="PRIVATE">Tour private</SelectItem>
-                        <SelectItem value="ONE_ON_ONE">Tour 1-1</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="maxGuests">Số khách tối đa</Label>
-                    <Input
-                      type="number"
-                      value={newTour.maxGuests}
-                      onChange={(e) => setNewTour({...newTour, maxGuests: parseInt(e.target.value)})}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="price">Giá tour (VNĐ)</Label>
-                    <Input
-                      type="number"
-                      value={newTour.price}
-                      onChange={(e) => setNewTour({...newTour, price: parseFloat(e.target.value)})}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="status">Trạng thái</Label>
-                    <Select value={newTour.status} onValueChange={(value) => setNewTour({...newTour, status: value})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="UPCOMING">Sắp diễn ra</SelectItem>
-                        <SelectItem value="ONGOING">Đang diễn ra</SelectItem>
-                        <SelectItem value="COMPLETED">Hoàn thành</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="startDate">Ngày bắt đầu</Label>
-                    <Input
-                      type="date"
-                      value={newTour.startDate}
-                      onChange={(e) => setNewTour({...newTour, startDate: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="endDate">Ngày kết thúc</Label>
-                    <Input
-                      type="date"
-                      value={newTour.endDate}
-                      onChange={(e) => setNewTour({...newTour, endDate: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end space-x-2 mt-4">
-                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                    Hủy
-                  </Button>
-                  <Button onClick={handleCreateTour}>
-                    Tạo Tour
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <div className="flex items-center space-x-4">
+              <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
+                Xin chào, Thanh iu dấu
+              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      className="rounded-full"
+                      onClick={() => setIsCreateOrderDialogOpen(true)}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Tạo đơn hàng mới</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Button variant="outline">Đăng xuất</Button>
+            </div>
           </div>
         </div>
       </header>
+
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-8">
+            <Button variant="ghost" asChild>
+              <a href="/">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Dashboard
+              </a>
+            </Button>
+            <Button variant="ghost" className="text-blue-600">
+              <MapPin className="w-4 h-4 mr-2" />
+              Quản lý Đơn hàng
+            </Button>
+            <Button variant="ghost" asChild>
+              <a href="/expenses">
+                <DollarSign className="w-4 h-4 mr-2" />
+                Quản lý Chi phí
+              </a>
+            </Button>
+          </div>
+        </div>
+      </nav>
 
       {/* Filters */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -380,28 +265,6 @@ export default function ToursPage() {
                     </div>
                   </div>
 
-                  {/* Status update buttons */}
-                  <div className="flex gap-2">
-                    {tour.status === 'UPCOMING' && (
-                      <Button 
-                        size="sm" 
-                        onClick={() => handleUpdateTourStatus(tour.id, 'ONGOING')}
-                        className="flex-1"
-                      >
-                        <UserCheck className="w-4 h-4 mr-1" />
-                        Bắt đầu tour
-                      </Button>
-                    )}
-                    {tour.status === 'ONGOING' && (
-                      <Button 
-                        size="sm" 
-                        onClick={() => handleUpdateTourStatus(tour.id, 'COMPLETED')}
-                        className="flex-1"
-                      >
-                        Hoàn thành tour
-                      </Button>
-                    )}
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -414,6 +277,13 @@ export default function ToursPage() {
           </div>
         )}
       </div>
+
+      {/* Create Order Dialog */}
+      <CreateOrderDialog
+        open={isCreateOrderDialogOpen}
+        onOpenChange={setIsCreateOrderDialogOpen}
+        onSuccess={fetchTours}
+      />
     </div>
   )
 }

@@ -52,11 +52,11 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-gradient-to-r from-green-100 via-green-50 to-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-20">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">Hệ thống Quản lý Du lịch</h1>
+              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16" />
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
@@ -95,7 +95,7 @@ export default function Home() {
             <Button variant="ghost" asChild>
               <a href="/tours">
                 <MapPin className="w-4 h-4 mr-2" />
-                Quản lý Tour
+                Quản lý Đơn hàng
               </a>
             </Button>
             <Button variant="ghost" asChild>
