@@ -5,7 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Users, DollarSign, TrendingUp, MapPin, Phone, Mail, Facebook, Instagram } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Calendar, Users, DollarSign, TrendingUp, MapPin, Phone, Mail, Facebook, Instagram, Plus } from 'lucide-react'
+import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
 
 export default function Home() {
   const [stats, setStats] = useState({
@@ -20,6 +22,7 @@ export default function Home() {
   const [tourStatus, setTourStatus] = useState({ upcoming: 0, ongoing: 0, completed: 0 })
   const [revenueByType, setRevenueByType] = useState({ group: 0, private: 0, oneOnOne: 0 })
   const [loading, setLoading] = useState(true)
+  const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchDashboardData()
@@ -56,6 +59,25 @@ export default function Home() {
               <h1 className="text-2xl font-bold text-gray-900">Hệ thống Quản lý Du lịch</h1>
             </div>
             <div className="flex items-center space-x-4">
+              <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
+                Xin chào, Thanh iu dấu
+              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      className="rounded-full"
+                      onClick={() => setIsCreateOrderDialogOpen(true)}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Tạo đơn hàng mới</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <Button variant="outline">Đăng xuất</Button>
             </div>
           </div>
@@ -69,12 +91,6 @@ export default function Home() {
             <Button variant="ghost" className="text-blue-600">
               <TrendingUp className="w-4 h-4 mr-2" />
               Dashboard
-            </Button>
-            <Button variant="ghost" asChild>
-              <a href="/booking">
-                <Calendar className="w-4 h-4 mr-2" />
-                Quản lý Booking
-              </a>
             </Button>
             <Button variant="ghost" asChild>
               <a href="/tours">
@@ -273,6 +289,13 @@ export default function Home() {
         </>
         )}
       </main>
+
+      {/* Create Order Dialog */}
+      <CreateOrderDialog
+        open={isCreateOrderDialogOpen}
+        onOpenChange={setIsCreateOrderDialogOpen}
+        onSuccess={fetchDashboardData}
+      />
     </div>
   )
 }

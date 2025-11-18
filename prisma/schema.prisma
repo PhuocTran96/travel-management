@@ -9,28 +9,32 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
 // Khách hàng
 model Customer {
-  id          String   @id @default(cuid())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   maKH        String   @unique // Mã khách hàng
   name        String
   email       String?
   phone       String
   source      String   // FB, IG, Website, etc.
   address     String?
+  gender      Gender?  // Giới tính
+  title       String?  // Danh xưng
+  country     String?  // Quốc gia
+  dateOfBirth DateTime? // Ngày sinh
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   bookings    Booking[]
 }
 
 // Tour
 model Tour {
-  id          String   @id @default(cuid())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   description String?
   type        TourType // GROUP, PRIVATE, ONE_ON_ONE
@@ -41,41 +45,60 @@ model Tour {
   status      TourStatus // UPCOMING, ONGOING, COMPLETED
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   bookings    Booking[]
   expenses    Expense[]
 }
 
 // Booking
 model Booking {
-  id          String       @id @default(cuid())
-  customerId  String
-  tourId      String
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  customerId  String       @db.ObjectId
+  tourId      String       @db.ObjectId
   deposit     Float
   totalPrice  Float
   status      BookingStatus // PENDING, CONFIRMED, CANCELLED
   notes       String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  
+
   customer    Customer     @relation(fields: [customerId], references: [id])
   tour        Tour         @relation(fields: [tourId], references: [id])
 }
 
 // Chi phí
 model Expense {
-  id          String       @id @default(cuid())
-  tourId      String
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  tourId      String       @db.ObjectId
   type        ExpenseType  // TOUR_COST, PARTNER, GUIDE, STAFF
   amount      Float
   description String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  
+
   tour        Tour         @relation(fields: [tourId], references: [id])
 }
 
+// Thông tin tour từ CSV
+model TourInfo {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  stt         Int      // STT trong file CSV
+  tenTour     String   // Tên Tour
+  dichVu      String   // Dịch vụ
+  gia         String   // Giá (để String vì có "Liên hệ")
+  ghiChu      String?  // Ghi chú
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("tour_info")
+}
+
 // Enums
+enum Gender {
+  MALE    // Nam
+  FEMALE  // Nữ
+}
+
 enum TourType {
   GROUP      // Tour ghép đoàn
   PRIVATE    // Tour private

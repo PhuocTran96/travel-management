@@ -4,13 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Travel Management System** (Hệ thống Quản lý Du lịch) built with Next.js 15, TypeScript, Prisma ORM, and SQLite. The application manages tour bookings, customers, tours, and expenses for a travel business.
+This is a **Travel Management System** (Hệ thống Quản lý Du lịch) built with Next.js 15, TypeScript, Prisma ORM, and MongoDB Atlas. The application manages tour bookings, customers, tours, and expenses for a travel business.
 
 **Key Features:**
 - Customer management (with unique customer codes)
 - Tour management (GROUP, PRIVATE, ONE_ON_ONE types)
 - Booking management with deposit tracking
 - Expense tracking (tour costs, partners, guides, staff)
+- Tour catalog integration with 64 pre-loaded tours and services
+- Multi-step order creation workflow
 - Real-time WebSocket communication via Socket.IO
 - Dashboard with statistics and analytics
 
@@ -26,6 +28,9 @@ npm run build
 
 # Start production server
 npm run start
+
+# Start with database migration (for Railway)
+npm run start:migrate
 
 # Linting
 npm run lint
@@ -51,28 +56,36 @@ npm run db:reset
 ### Custom Server Setup
 The application uses a **custom Next.js server** ([server.ts](server.ts)) that integrates Socket.IO for real-time communication:
 - Next.js handles HTTP routes via `next/server`
-- Socket.IO server runs on the same port at `/api/socketio`
+- Socket.IO server runs on the same port (3000) at `/api/socketio`
 - Socket handlers are defined in [src/lib/socket.ts](src/lib/socket.ts)
 - Development uses `nodemon` to watch for changes and restart the server
+- **Important**: Webpack watch is disabled in favor of nodemon-based hot reload
 
 ### Database Architecture
-**Database:** SQLite (located at `prisma/db/custom.db`)
+**Database:** MongoDB Atlas (cloud-hosted)
 **ORM:** Prisma with schema at [prisma/schema.prisma](prisma/schema.prisma)
 
 **Core Models:**
-- `Customer`: Customers with auto-generated unique codes (`KH0001`, `KH0002`, etc.)
+- `Customer`: Customers with auto-generated unique codes (`KH0001`, `KH0002`, etc.) including gender, title, country, and date of birth
 - `Tour`: Tours with type (GROUP/PRIVATE/ONE_ON_ONE), capacity, dates, and status
 - `Booking`: Links customers to tours with deposit and payment tracking
 - `Expense`: Tour-related expenses categorized by type (TOUR_COST, PARTNER, GUIDE, STAFF)
+- `TourInfo`: Pre-loaded tour catalog with 64 tours/services, prices, and notes (imported from CSV)
 
 **Database Client:** Singleton pattern in [src/lib/db.ts](src/lib/db.ts) to prevent connection exhaustion in development.
 
+**MongoDB-Specific Patterns:**
+- All IDs use `@id @default(auto()) @map("_id") @db.ObjectId`
+- Foreign keys use `@db.ObjectId` type
+- No migrations - use `prisma db push` instead
+
 ### API Structure
 All API routes follow Next.js App Router conventions in `src/app/api/`:
-- `/api/customers` - Customer CRUD operations
+- `/api/customers` - Customer CRUD operations with auto-generated maKH codes
 - `/api/tours` - Tour management with bookings/expenses included
 - `/api/bookings` - Booking operations
 - `/api/expenses` - Expense tracking
+- `/api/tour-info` - Tour catalog data for order creation
 - `/api/dashboard` - Aggregated statistics
 
 Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for data access.
@@ -85,7 +98,7 @@ Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for 
 **Forms:** React Hook Form with Zod validation
 
 **Import Aliases:**
-- `@/components` → `src/compoments` (note the misspelling)
+- `@/components`
 - `@/lib` → `src/lib`
 - `@/hooks` → `src/hooks`
 - `@/app` → `src/app`
@@ -113,8 +126,9 @@ When working with UI components, use the import alias `@/components/ui/...` whic
 - Logs are written to `dev.log` and `server.log`
 
 ### Environment Configuration
-Database connection is configured via `DATABASE_URL` environment variable.
-Default: `file:./db/custom.db` (relative to `prisma/schema.prisma`, resolves to `prisma/db/custom.db`)
+Database connection is configured via `DATABASE_URL` environment variable in `.env`:
+- MongoDB Atlas connection string format: `mongodb+srv://username:password@cluster.mongodb.net/database_name`
+- The project uses MongoDB Atlas (not local MongoDB or SQLite)
 
 ### TypeScript & Linting
 - TypeScript build errors are **ignored** during builds (`ignoreBuildErrors: true`)
@@ -122,14 +136,64 @@ Default: `file:./db/custom.db` (relative to `prisma/schema.prisma`, resolves to 
 - Most linting rules are disabled in [eslint.config.mjs](eslint.config.mjs)
 - Prefer const usage is disabled
 
+### Deployment (Railway)
+- Configured via [railway.json](railway.json)
+- Build command: `npm run build` (includes Prisma Client generation)
+- Start command: `npm run start:migrate` (pushes schema then starts server)
+- Uses MongoDB Atlas connection from environment variables
+- No ephemeral storage issues (MongoDB is cloud-hosted)
+
 ## Working with Database
 
 After modifying [prisma/schema.prisma](prisma/schema.prisma):
 1. Generate Prisma Client: `npm run db:generate`
-2. Push changes to database: `npm run db:push` (no migrations)
-   OR create migration: `npm run db:migrate`
+2. Push changes to database: `npm run db:push` (no migrations needed for MongoDB)
 
 The Prisma Client is imported as `db` from `@/lib/db`.
+
+**Important MongoDB Patterns:**
+- Use `@db.ObjectId` for all ID fields and foreign keys
+- Auto-generated IDs use `@id @default(auto()) @map("_id") @db.ObjectId`
+- No need for migrations - MongoDB is schemaless, just push changes
+
+## Multi-Step Order Creation Workflow
+
+The [src/components/ui/create-order-dialog.tsx](src/components/ui/create-order-dialog.tsx) component implements a critical business workflow:
+
+### Design Principles
+1. **Two-step wizard**: Customer info → Tour selection
+2. **Single-column vertical layout** to prevent horizontal scroll
+3. **Deferred persistence**: Only saves to database after completing BOTH steps
+4. **Cascading dropdowns**: Tour name → Available services → Auto-filled price/notes
+5. **Simplified date picker**: 3 separate dropdowns (day/month/year) instead of full calendar
+
+### Customer Step Fields
+- Basic: Name, Email, Phone, Source, Address
+- Enhanced: Gender (dropdown), Title (input), Country (autocomplete with all world countries), Date of Birth (3 dropdowns)
+
+### Tour Step Integration
+- Fetches tour catalog from `/api/tour-info` (64 pre-loaded tours/services)
+- User selects tour name → Filters available services
+- User selects service → Auto-fills price and shows notes
+- Tour type, max guests, dates configured manually
+
+### Persistence Flow
+```typescript
+handleCreateOrder():
+  1. POST /api/customers (creates customer with maKH auto-generation)
+  2. POST /api/tours (creates tour)
+  3. POST /api/bookings (creates booking linking customer + tour)
+  4. Reset form and close dialog
+```
+
+**Critical**: Do NOT save after each step. All data must be saved atomically at the end.
+
+## Tour Catalog System
+
+The `TourInfo` collection contains 64 pre-loaded tour/service combinations imported from CSV:
+- **Fields**: stt (order), tenTour (tour name), dichVu (service), gia (price - can be "Liên hệ"), ghiChu (notes)
+- **Usage**: Powers cascading dropdowns in order creation workflow
+- **Data source**: Originally imported from `tour_info.csv` (import script was deleted after one-time use)
 
 ## Socket.IO Integration
 
@@ -144,9 +208,36 @@ Socket setup in [src/lib/socket.ts](src/lib/socket.ts) - currently implements ec
 - **Runtime:** Node.js with tsx
 - **Framework:** Next.js 15 (App Router)
 - **Language:** TypeScript 5
-- **Database:** SQLite via Prisma ORM
+- **Database:** MongoDB Atlas via Prisma ORM
 - **Styling:** Tailwind CSS 4
 - **UI Library:** shadcn/ui (Radix UI primitives)
 - **Forms:** React Hook Form + Zod
 - **Real-time:** Socket.IO
 - **Icons:** Lucide React
+- **Countries:** world-countries package
+- **Deployment:** Railway.app
+
+## Common Issues
+
+### Port Already in Use (EADDRINUSE)
+If you see "Port 3000 is already in use":
+```bash
+# Windows
+netstat -ano | findstr :3000
+taskkill //F //PID <pid>
+
+# Unix/Mac
+lsof -ti:3000 | xargs kill -9
+```
+
+### Prisma Client Not Found
+After schema changes, if you see "Module not found: Can't resolve '@prisma/client'":
+1. Kill dev server
+2. Run `npx prisma generate`
+3. Restart dev server with `npm run dev`
+
+### Dialog Horizontal Scroll
+If forms in dialogs have horizontal scroll:
+- Use single-column vertical layout (`space-y-4`) instead of grid
+- Ensure dialog has sufficient width (`max-w-4xl`)
+- Avoid 2-column grids in constrained spaces
