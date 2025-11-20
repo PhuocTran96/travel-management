@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +40,9 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
   // Service quantities: { serviceId: quantity }
   const [serviceQuantities, setServiceQuantities] = useState<Record<string, number>>({})
+
+  // Custom services
+  const [customServices, setCustomServices] = useState<Array<{ id: string; name: string; price: number; quantity: number }>>([])
 
   // Payment info
   const [discount, setDiscount] = useState(0) // Percentage
@@ -107,9 +110,10 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     ? tourInfoList.filter(t => t.tenTour === selectedTourName)
     : []
 
-  // Calculate total price from all selected services
+  // Calculate total price from all selected services (catalog + custom)
   const calculateTotalPrice = () => {
     let total = 0
+    // Catalog services
     Object.entries(serviceQuantities).forEach(([serviceId, quantity]) => {
       const service = tourInfoList.find(t => t.id === serviceId)
       if (service && service.gia !== 'Liên hệ') {
@@ -117,12 +121,18 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
         total += price * quantity
       }
     })
+    // Custom services
+    customServices.forEach(service => {
+      total += service.price * service.quantity
+    })
     return total
   }
 
-  // Calculate total guests from all selected services
+  // Calculate total guests from all selected services (catalog + custom)
   const calculateTotalGuests = () => {
-    return Object.values(serviceQuantities).reduce((sum, qty) => sum + qty, 0)
+    const catalogGuests = Object.values(serviceQuantities).reduce((sum, qty) => sum + qty, 0)
+    const customGuests = customServices.reduce((sum, service) => sum + service.quantity, 0)
+    return catalogGuests + customGuests
   }
 
   // Calculate final price after discount
@@ -145,7 +155,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
   // Count total guests with details
   const countGuestsWithDetails = () => {
-    let count = 1 // Leader (customer from step 1)
+    let count = 0
     Object.values(guestDetails).forEach(guests => {
       count += guests.filter(g => g.name.trim() !== '').length
     })
@@ -155,8 +165,13 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   // Initialize guest details when moving to review step
   const initializeGuestDetails = () => {
     const details: Record<string, Array<{ name: string; phone: string }>> = {}
+    // Catalog services
     Object.entries(serviceQuantities).forEach(([serviceId, qty]) => {
       details[serviceId] = Array.from({ length: qty }, () => ({ name: '', phone: '' }))
+    })
+    // Custom services
+    customServices.filter(s => s.quantity > 0).forEach((service) => {
+      details[service.id] = Array.from({ length: service.quantity }, () => ({ name: '', phone: '' }))
     })
     setGuestDetails(details)
   }
@@ -180,7 +195,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
       price: totalPrice,
       maxGuests: totalGuests
     }))
-  }, [serviceQuantities])
+  }, [serviceQuantities, customServices])
 
   // Update service quantity
   const updateServiceQuantity = (serviceId: string, delta: number) => {
@@ -227,6 +242,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     setTourData({ name: '', description: '', type: 'GROUP', maxGuests: 10, price: 0, startDate: '', endDate: '', status: 'UPCOMING' })
     setSelectedTourName('')
     setServiceQuantities({})
+    setCustomServices([])
     setDiscount(0)
     setPaidAmount(0)
     setGuestDetails({})
@@ -245,9 +261,10 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   }
 
   const handleNextToReview = () => {
-    // Validate tour data
-    if (!selectedTourName || Object.keys(serviceQuantities).length === 0 || !tourData.startDate || !tourData.endDate) {
-      alert('Vui lòng điền đầy đủ thông tin tour')
+    // Validate tour data - check both catalog and custom services
+    const hasServices = Object.keys(serviceQuantities).length > 0 || customServices.filter(s => s.quantity > 0).length > 0
+    if (!tourData.startDate || !tourData.endDate || !hasServices) {
+      alert('Vui lòng điền đầy đủ thông tin tour và chọn ít nhất 1 dịch vụ')
       return
     }
     // Initialize guest details
@@ -257,14 +274,32 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   }
 
   const handleCreateOrder = async () => {
-    // Validate có ít nhất 1 dịch vụ được chọn
-    if (Object.keys(serviceQuantities).length === 0) {
+    // Validate có ít nhất 1 dịch vụ được chọn (catalog hoặc custom)
+    if (Object.keys(serviceQuantities).length === 0 && customServices.filter(s => s.quantity > 0).length === 0) {
       alert('Vui lòng chọn ít nhất 1 dịch vụ')
       return
     }
 
     setLoading(true)
     try {
+      // Step 0: Save custom services to TourInfo DB if they don't exist
+      for (const customService of customServices.filter(s => s.name.trim() !== '' && s.quantity > 0)) {
+        try {
+          await fetch('/api/tour-info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenTour: selectedTourName || 'Custom',
+              dichVu: customService.name,
+              gia: customService.price.toString(),
+              ghiChu: 'Dịch vụ tùy chỉnh'
+            })
+          })
+        } catch (err) {
+          console.error('Error saving custom service to DB:', err)
+        }
+      }
+
       // Step 1: Create customer
       const customerResponse = await fetch('/api/customers', {
         method: 'POST',
@@ -285,13 +320,18 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
       const customerId = customerResult.id
 
-      // Build tour name with selected services
-      const selectedServices = Object.keys(serviceQuantities).map(serviceId => {
+      // Build tour name with selected services (catalog + custom)
+      const catalogServices = Object.keys(serviceQuantities).map(serviceId => {
         const service = tourInfoList.find(t => t.id === serviceId)
         return service ? `${service.dichVu} (x${serviceQuantities[serviceId]})` : ''
-      }).filter(Boolean).join(', ')
+      }).filter(Boolean)
 
-      const tourName = `${selectedTourName} - ${selectedServices}`
+      const customServiceNames = customServices
+        .filter(s => s.quantity > 0 && s.name.trim() !== '')
+        .map(s => `${s.name} (x${s.quantity})`)
+
+      const allServices = [...catalogServices, ...customServiceNames].join(', ')
+      const tourName = selectedTourName ? `${selectedTourName} - ${allServices}` : allServices
 
       // Step 2: Create tour
       const tourResponse = await fetch('/api/tours', {
@@ -347,11 +387,12 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(isOpen) => {
       onOpenChange(isOpen)
       if (!isOpen) resetForm()
     }}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[98vw] sm:w-[90vw] max-w-[1100px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tạo Đơn Hàng Mới</DialogTitle>
           <DialogDescription>
@@ -585,37 +626,74 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
           {/* Step 2: Tour */}
           <TabsContent value="tour" className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label htmlFor="tourName">Tên Tour *</Label>
-              <Select
-                value={selectedTourName}
-                onValueChange={(value) => {
-                  setSelectedTourName(value)
-                  setServiceQuantities({}) // Reset dịch vụ khi chọn tour mới
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn tour..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueTourNames.map((tourName) => (
-                    <SelectItem key={tourName} value={tourName}>
-                      {tourName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tourName">Chọn tên Tour *</Label>
+                <Select
+                  value={selectedTourName}
+                  onValueChange={(value) => {
+                    setSelectedTourName(value)
+                    setServiceQuantities({}) // Reset dịch vụ khi chọn tour mới
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn tour..." />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="max-h-[300px]">
+                    {uniqueTourNames.map((tourName) => (
+                      <SelectItem key={tourName} value={tourName}>
+                        {tourName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">Loại Tour *</Label>
+                <Select value={tourData.type} onValueChange={(value) => setTourData({ ...tourData, type: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GROUP">Tour ghép đoàn</SelectItem>
+                    <SelectItem value="PRIVATE">Tour private</SelectItem>
+                    <SelectItem value="ONE_ON_ONE">Tour 1-1</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startDate">Ngày bắt đầu *</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={tourData.startDate}
+                  onChange={(e) => setTourData({ ...tourData, startDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="endDate">Ngày kết thúc *</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={tourData.endDate}
+                  onChange={(e) => setTourData({ ...tourData, endDate: e.target.value })}
+                />
+              </div>
             </div>
 
             {selectedTourName && (
               <div className="space-y-2">
                 <Label>Dịch vụ *</Label>
-                <div className="border rounded-lg p-4 space-y-3 max-h-[300px] overflow-y-auto">
+                <div className="border rounded-lg p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                  {/* Catalog services */}
                   {availableServices.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">Không có dịch vụ khả dụng</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">Không có dịch vụ khả dụng từ catalog</p>
                   ) : (
                     availableServices.map((service) => (
-                      <div key={service.id} className="flex items-center justify-between gap-4 p-3 border rounded-md bg-muted/30">
+                      <div key={service.id} className="flex items-start justify-between gap-4 p-3 border rounded-md bg-muted/30">
                         <div className="flex-1">
                           <p className="font-medium">{service.dichVu}</p>
                           <p className="text-sm text-muted-foreground">
@@ -643,7 +721,8 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                             min="0"
                             value={serviceQuantities[service.id] || 0}
                             onChange={(e) => setServiceQuantity(service.id, parseInt(e.target.value) || 0)}
-                            className="w-16 text-center"
+                            className="w-16 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            style={{ textAlign: 'center' }}
                           />
                           <Button
                             type="button"
@@ -654,35 +733,141 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                           >
                             <Plus className="h-4 w-4" />
                           </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              const newQuantities = { ...serviceQuantities }
+                              delete newQuantities[service.id]
+                              setServiceQuantities(newQuantities)
+                            }}
+                          >
+                            <Plus className="h-4 w-4 rotate-45" />
+                          </Button>
                         </div>
                       </div>
                     ))
                   )}
+
+                  {/* Custom services */}
+                  {customServices.map((service) => (
+                    <div key={service.id} className="flex items-start justify-between gap-4 p-3 border-2 border-dashed rounded-md bg-amber-50/50">
+                      <div className="flex-1">
+                        <Input
+                          placeholder="Tên dịch vụ"
+                          value={service.name}
+                          onChange={(e) => {
+                            setCustomServices(customServices.map(s =>
+                              s.id === service.id ? { ...s, name: e.target.value } : s
+                            ))
+                          }}
+                          className="mb-2"
+                        />
+                        <Input
+                          type="text"
+                          placeholder="Giá (VNĐ)"
+                          value={service.price === 0 ? '' : formatNumber(service.price)}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '')
+                            setCustomServices(customServices.map(s =>
+                              s.id === service.id ? { ...s, price: value === '' ? 0 : parseInt(value) } : s
+                            ))
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value === '') {
+                              setCustomServices(customServices.map(s =>
+                                s.id === service.id ? { ...s, price: 0 } : s
+                              ))
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setCustomServices(customServices.map(s =>
+                              s.id === service.id ? { ...s, quantity: Math.max(0, s.quantity - 1) } : s
+                            ))
+                          }}
+                          disabled={service.quantity === 0}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={service.quantity || 0}
+                          onChange={(e) => {
+                            setCustomServices(customServices.map(s =>
+                              s.id === service.id ? { ...s, quantity: parseInt(e.target.value) || 0 } : s
+                            ))
+                          }}
+                          className="w-16 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          style={{ textAlign: 'center' }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setCustomServices(customServices.map(s =>
+                              s.id === service.id ? { ...s, quantity: s.quantity + 1 } : s
+                            ))
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setCustomServices(customServices.filter(s => s.id !== service.id))
+                          }}
+                        >
+                          <Plus className="h-4 w-4 rotate-45" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Nút thêm dịch vụ khác */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      const newId = `custom-${Date.now()}`
+                      setCustomServices([...customServices, { id: newId, name: '', price: 0, quantity: 0 }])
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Thêm dịch vụ khác
+                  </Button>
                 </div>
 
-                {/* Hiển thị tổng tiền */}
-                <div className="bg-primary/10 p-3 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold">Tổng tiền:</span>
-                    <span className="text-lg font-bold">
+                {/* Tổng tiền và tổng số khách */}
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div className="bg-primary/10 p-3 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Tổng tiền</div>
+                    <div className="text-xl font-bold">
                       {calculateTotalPrice().toLocaleString('vi-VN')} VNĐ
-                    </span>
-                  </div>
-                  {Object.keys(serviceQuantities).length > 0 && (
-                    <div className="mt-2 text-sm text-muted-foreground">
-                      {Object.entries(serviceQuantities).map(([serviceId, qty]) => {
-                        const service = tourInfoList.find(t => t.id === serviceId)
-                        if (!service) return null
-                        const price = service.gia === 'Liên hệ' ? 0 : parseFloat(service.gia.replace(/,/g, ''))
-                        return (
-                          <div key={serviceId} className="flex justify-between">
-                            <span>{service.dichVu} x{qty}</span>
-                            <span>{(price * qty).toLocaleString('vi-VN')} VNĐ</span>
-                          </div>
-                        )
-                      })}
                     </div>
-                  )}
+                  </div>
+                  <div className="bg-primary/10 p-3 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Tổng số khách</div>
+                    <div className="text-xl font-bold">
+                      {calculateTotalGuests()}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -698,70 +883,17 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="type">Loại Tour *</Label>
-                <Select value={tourData.type} onValueChange={(value) => setTourData({ ...tourData, type: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="GROUP">Tour ghép đoàn</SelectItem>
-                    <SelectItem value="PRIVATE">Tour private</SelectItem>
-                    <SelectItem value="ONE_ON_ONE">Tour 1-1</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="maxGuests">Tổng số khách *</Label>
-                <Input
-                  id="maxGuests"
-                  type="number"
-                  value={tourData.maxGuests}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="price">Giá (VNĐ) *</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  value={tourData.price}
-                  onChange={(e) => setTourData({ ...tourData, price: parseFloat(e.target.value) || 0 })}
-                  min="0"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="startDate">Ngày bắt đầu *</Label>
-                <Input
-                  id="startDate"
-                  type="datetime-local"
-                  value={tourData.startDate}
-                  onChange={(e) => setTourData({ ...tourData, startDate: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="endDate">Ngày kết thúc *</Label>
-                <Input
-                  id="endDate"
-                  type="datetime-local"
-                  value={tourData.endDate}
-                  onChange={(e) => setTourData({ ...tourData, endDate: e.target.value })}
-                />
-              </div>
-            </div>
-
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCurrentStep('customer')}>
                 ← Quay lại
               </Button>
               <Button
                 onClick={handleNextToReview}
-                disabled={!selectedTourName || Object.keys(serviceQuantities).length === 0 || !tourData.startDate || !tourData.endDate}
+                disabled={
+                  !tourData.startDate ||
+                  !tourData.endDate ||
+                  (Object.keys(serviceQuantities).length === 0 && customServices.filter(s => s.quantity > 0).length === 0)
+                }
               >
                 Tiếp theo →
               </Button>
@@ -770,16 +902,25 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
           {/* Step 3: Review */}
           <TabsContent value="review" className="space-y-4 mt-4">
-            {/* Tên tour */}
-            <div className="space-y-2">
-              <Label className="text-lg font-semibold">Tên Tour</Label>
-              <p className="text-base">{selectedTourName}</p>
+            {/* Tên tour và Loại tour */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-lg font-semibold">Tên Tour</Label>
+                <p className="text-base">{selectedTourName}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-lg font-semibold">Loại Tour</Label>
+                <p className="text-base">
+                  {tourData.type === 'GROUP' ? 'Tour ghép đoàn' : tourData.type === 'PRIVATE' ? 'Tour private' : 'Tour 1-1'}
+                </p>
+              </div>
             </div>
 
             {/* Dịch vụ đã chọn */}
             <div className="space-y-2">
               <Label className="text-lg font-semibold">Dịch vụ đã chọn</Label>
               <div className="border rounded-lg p-4 space-y-2">
+                {/* Catalog services */}
                 {Object.entries(serviceQuantities).map(([serviceId, qty]) => {
                   const service = tourInfoList.find(t => t.id === serviceId)
                   if (!service) return null
@@ -795,6 +936,18 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                     </div>
                   )
                 })}
+                {/* Custom services */}
+                {customServices.filter(s => s.quantity > 0).map((service) => (
+                  <div key={service.id} className="flex justify-between items-center py-2 border-b last:border-b-0">
+                    <div>
+                      <p className="font-medium">{service.name}</p>
+                      <p className="text-sm text-muted-foreground">Giá: {formatNumber(service.price)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{service.quantity} khách</p>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Guest details summary */}
@@ -816,6 +969,58 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                   >
                     Bổ sung thông tin
                   </Button>
+                </div>
+              </div>
+
+              {/* Tóm tắt thông tin khách hàng */}
+              <div className="mt-3 p-4 bg-green-50 rounded-lg border border-green-200">
+                <Label className="text-base font-semibold text-green-900 mb-3 block">Tóm tắt thông tin khách hàng</Label>
+                <div className="space-y-2">
+                  {/* Trưởng nhóm */}
+                  <div className="text-sm">
+                    <span className="font-medium text-green-900">Trưởng nhóm:</span>{' '}
+                    <span className="text-green-800">{customerData.name} - {customerData.phone}</span>
+                  </div>
+
+                  {/* Catalog service guests */}
+                  {Object.entries(serviceQuantities).map(([serviceId, qty]) => {
+                    const service = tourInfoList.find(t => t.id === serviceId)
+                    if (!service) return null
+                    const guests = guestDetails[serviceId] || []
+                    const filledGuests = guests.filter(g => g.name.trim() !== '')
+
+                    return filledGuests.length > 0 ? (
+                      <div key={serviceId} className="text-sm">
+                        <span className="font-medium text-green-900">{service.dichVu}:</span>
+                        <div className="ml-4 mt-1 space-y-1">
+                          {filledGuests.map((guest, idx) => (
+                            <div key={idx} className="text-green-800">
+                              • {guest.name} - {guest.phone}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null
+                  })}
+
+                  {/* Custom service guests */}
+                  {customServices.filter(s => s.quantity > 0).map((service) => {
+                    const guests = guestDetails[service.id] || []
+                    const filledGuests = guests.filter(g => g.name.trim() !== '')
+
+                    return filledGuests.length > 0 ? (
+                      <div key={service.id} className="text-sm">
+                        <span className="font-medium text-green-900">{service.name}:</span>
+                        <div className="ml-4 mt-1 space-y-1">
+                          {filledGuests.map((guest, idx) => (
+                            <div key={idx} className="text-green-800">
+                              • {guest.name} - {guest.phone}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null
+                  })}
                 </div>
               </div>
             </div>
@@ -898,81 +1103,114 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
           </TabsContent>
         </Tabs>
       </DialogContent>
+    </Dialog>
 
-      {/* Guest Details Dialog */}
-      <Dialog open={showGuestDetailsDialog} onOpenChange={setShowGuestDetailsDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Bổ sung thông tin khách</DialogTitle>
-            <DialogDescription>
-              Điền thông tin chi tiết cho từng khách tham gia tour
-            </DialogDescription>
-          </DialogHeader>
+    {/* Guest Details Dialog */}
+    <Dialog open={showGuestDetailsDialog} onOpenChange={setShowGuestDetailsDialog}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Bổ sung thông tin khách</DialogTitle>
+          <DialogDescription>
+            Điền thông tin chi tiết cho từng khách tham gia tour
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Trưởng nhóm */}
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <Label className="text-base font-semibold text-green-900">Trưởng nhóm</Label>
-              <div className="mt-2 grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm text-muted-foreground">Tên</Label>
-                  <Input value={customerData.name} disabled className="bg-muted" />
-                </div>
-                <div>
-                  <Label className="text-sm text-muted-foreground">Số điện thoại</Label>
-                  <Input value={customerData.phone} disabled className="bg-muted" />
-                </div>
+        <div className="space-y-4">
+          {/* Trưởng nhóm */}
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <Label className="text-base font-semibold text-green-900">Trưởng nhóm</Label>
+            <div className="mt-2 grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm text-muted-foreground">Tên</Label>
+                <Input value={customerData.name} disabled className="bg-muted" />
+              </div>
+              <div>
+                <Label className="text-sm text-muted-foreground">Số điện thoại</Label>
+                <Input value={customerData.phone} disabled className="bg-muted" />
               </div>
             </div>
+          </div>
 
-            {/* Guest details by service */}
-            {Object.entries(serviceQuantities).map(([serviceId, qty]) => {
-              const service = tourInfoList.find(t => t.id === serviceId)
-              if (!service) return null
+          {/* Guest details by service - Catalog */}
+          {Object.entries(serviceQuantities).map(([serviceId, qty]) => {
+            const service = tourInfoList.find(t => t.id === serviceId)
+            if (!service) return null
 
-              return (
-                <div key={serviceId} className="space-y-3">
-                  <Label className="text-base font-semibold">{service.dichVu} ({qty} khách)</Label>
-                  <div className="space-y-3 pl-4 border-l-2 border-primary/30">
-                    {Array.from({ length: qty }).map((_, index) => (
-                      <div key={index} className="p-3 bg-muted/30 rounded-lg">
-                        <p className="text-sm font-medium mb-2">Khách #{index + 1}</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-xs text-muted-foreground">Tên</Label>
-                            <Input
-                              value={guestDetails[serviceId]?.[index]?.name || ''}
-                              onChange={(e) => updateGuestDetail(serviceId, index, 'name', e.target.value)}
-                              placeholder="Nhập tên khách"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs text-muted-foreground">Số điện thoại</Label>
-                            <Input
-                              value={guestDetails[serviceId]?.[index]?.phone || ''}
-                              onChange={(e) => updateGuestDetail(serviceId, index, 'phone', e.target.value)}
-                              placeholder="Nhập số điện thoại"
-                            />
-                          </div>
+            return (
+              <div key={serviceId} className="space-y-3">
+                <Label className="text-base font-semibold">{service.dichVu} ({qty} khách)</Label>
+                <div className="space-y-3 pl-4 border-l-2 border-primary/30">
+                  {Array.from({ length: qty }).map((_, index) => (
+                    <div key={index} className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-sm font-medium mb-2">Khách #{index + 1}</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Tên</Label>
+                          <Input
+                            value={guestDetails[serviceId]?.[index]?.name || ''}
+                            onChange={(e) => updateGuestDetail(serviceId, index, 'name', e.target.value)}
+                            placeholder="Nhập tên khách"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Số điện thoại</Label>
+                          <Input
+                            value={guestDetails[serviceId]?.[index]?.phone || ''}
+                            onChange={(e) => updateGuestDetail(serviceId, index, 'phone', e.target.value)}
+                            placeholder="Nhập số điện thoại"
+                          />
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )
-            })}
-          </div>
+              </div>
+            )
+          })}
 
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowGuestDetailsDialog(false)}>
-              Đóng
-            </Button>
-            <Button onClick={() => setShowGuestDetailsDialog(false)}>
-              Lưu thông tin
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          {/* Guest details by service - Custom */}
+          {customServices.filter(s => s.quantity > 0).map((service) => (
+            <div key={service.id} className="space-y-3">
+              <Label className="text-base font-semibold">{service.name} ({service.quantity} khách)</Label>
+              <div className="space-y-3 pl-4 border-l-2 border-primary/30">
+                {Array.from({ length: service.quantity }).map((_, index) => (
+                  <div key={index} className="p-3 bg-muted/30 rounded-lg">
+                    <p className="text-sm font-medium mb-2">Khách #{index + 1}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Tên</Label>
+                        <Input
+                          value={guestDetails[service.id]?.[index]?.name || ''}
+                          onChange={(e) => updateGuestDetail(service.id, index, 'name', e.target.value)}
+                          placeholder="Nhập tên khách"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Số điện thoại</Label>
+                        <Input
+                          value={guestDetails[service.id]?.[index]?.phone || ''}
+                          onChange={(e) => updateGuestDetail(service.id, index, 'phone', e.target.value)}
+                          placeholder="Nhập số điện thoại"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={() => setShowGuestDetailsDialog(false)}>
+            Đóng
+          </Button>
+          <Button onClick={() => setShowGuestDetailsDialog(false)}>
+            Lưu thông tin
+          </Button>
+        </div>
+      </DialogContent>
     </Dialog>
+    </>
   )
 }

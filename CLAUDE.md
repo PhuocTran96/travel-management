@@ -92,10 +92,11 @@ Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for 
 
 ### Frontend Architecture
 **Framework:** Next.js 15 with App Router (all routes in `src/app/`)
-**UI Components:** shadcn/ui components in `src/compoments/ui/` (note: "compoments" is intentionally misspelled)
+**UI Components:** shadcn/ui components in `src/components/ui/` (IMPORTANT: use correct spelling "components", NOT "compoments")
 **Styling:** Tailwind CSS 4 with custom configuration
 **State Management:** React hooks and local component state
 **Forms:** React Hook Form with Zod validation
+**Music Player:** Custom HTML5 audio player with Context API for global state persistence across navigation
 
 **Import Aliases:**
 - `@/components`
@@ -116,13 +117,12 @@ Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for 
 
 ## Important Notes
 
-### Path Inconsistency
-The components directory is intentionally named `compoments` (missing an 'o'). This is reflected in:
-- Folder: `src/compoments/`
-- Config: `compoments.json`
-- Import paths: `@/components/ui/*` (aliased correctly in tsconfig)
-
-When working with UI components, use the import alias `@/components/ui/...` which resolves to `src/compoments/ui/...`.
+### Component Structure
+**IMPORTANT:** The components directory uses the CORRECT spelling:
+- Folder: `src/components/` (NOT "compoments")
+- Import paths: `@/components/ui/*`
+- All UI components are in `src/components/ui/`
+- Provider components are in `src/components/providers/`
 
 ### Development Mode
 - Development uses **nodemon** + **tsx** for hot reload (not Next.js built-in HMR)
@@ -241,7 +241,36 @@ Socket setup in [src/lib/socket.ts](src/lib/socket.ts) - currently implements ec
 - **Real-time:** Socket.IO
 - **Icons:** Lucide React
 - **Countries:** world-countries package
+- **Music Player:** Custom HTML5 Audio with React Context
 - **Deployment:** Railway.app
+
+## Music Player System
+
+The application includes a custom music player that persists across page navigation:
+
+### Architecture
+- **Context Provider:** [src/contexts/music-player-context.tsx](src/contexts/music-player-context.tsx) - Global state management
+- **UI Component:** [src/components/ui/music-player.tsx](src/components/ui/music-player.tsx) - Player interface
+- **Layout Integration:** [src/components/providers/client-layout.tsx](src/components/providers/client-layout.tsx) - Client-side wrapper
+
+### Features
+- **Persistent Playback:** Music continues when navigating between pages (thanks to React Context)
+- **Two Display Modes:** Mini player (collapsed) and Expanded view
+- **Controls:** Play/Pause, Next/Previous, Seek (progress bar), Volume slider with mute
+- **LocalStorage:** Volume preference saved automatically
+- **Auto-Next:** Automatically plays next song when current song ends
+- **Responsive Design:** Fixed bottom bar with purple-pink gradient theme
+
+### Music Files
+- Location: `public/music/`
+- Format: `.mp3` files
+- Access: Direct URL path `/music/filename.mp3`
+- Currently loaded: "You Can Be King Again (From Hotarubi No Mori).mp3"
+
+### Adding New Songs
+1. Add `.mp3` files to `public/music/`
+2. Update playlist in [src/contexts/music-player-context.tsx](src/contexts/music-player-context.tsx) (line 45-52)
+3. Player will automatically include new songs in rotation
 
 ## Common Issues
 

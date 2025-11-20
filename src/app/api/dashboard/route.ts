@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { updateTourStatuses } from '@/lib/tour-status'
 
 export async function GET() {
   try {
+    // Auto-update tour statuses based on current date (GMT+7)
+    await updateTourStatuses()
+
     // Get total counts
     const totalCustomers = await db.customer.count()
     const totalTours = await db.tour.count()

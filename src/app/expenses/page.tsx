@@ -11,12 +11,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Plus, Search, DollarSign, TrendingDown, TrendingUp, Calendar, MapPin, Users } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState([])
   const [tours, setTours] = useState([])
   const [loading, setLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [tourFilter, setTourFilter] = useState('all')
@@ -144,29 +147,82 @@ export default function ExpensesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-gradient-to-r from-green-100 via-green-50 to-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-20">
             <div className="flex items-center">
-              <Button variant="ghost" onClick={() => window.history.back()}>
-                ← Quay lại
-              </Button>
-              <h1 className="ml-4 text-2xl font-bold text-gray-900">Quản lý Chi phí</h1>
+              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16" />
             </div>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Thêm Chi phí
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Thêm Chi phí mới</DialogTitle>
-                  <DialogDescription>
-                    Nhập thông tin chi phí cho tour
-                  </DialogDescription>
-                </DialogHeader>
+            <div className="flex items-center space-x-4">
+              <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
+                Xin chào, Thanh iu dấu
+              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      className="rounded-full"
+                      onClick={() => setIsCreateOrderDialogOpen(true)}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Tạo đơn hàng mới</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Button variant="outline">Đăng xuất</Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-8">
+            <Button variant="ghost" asChild>
+              <a href="/">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Dashboard
+              </a>
+            </Button>
+            <Button variant="ghost" asChild>
+              <a href="/tours">
+                <MapPin className="w-4 h-4 mr-2" />
+                Quản lý Đơn hàng
+              </a>
+            </Button>
+            <Button variant="ghost" className="text-blue-600">
+              <DollarSign className="w-4 h-4 mr-2" />
+              Quản lý Chi phí
+            </Button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Add Expense Button */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Quản lý Chi phí</h1>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Thêm Chi phí
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-[1100px]">
+              <DialogHeader>
+                <DialogTitle>Thêm Chi phí mới</DialogTitle>
+                <DialogDescription>
+                  Nhập thông tin chi phí cho tour
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="tour">Tour</Label>
@@ -184,53 +240,61 @@ export default function ExpensesPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="type">Loại chi phí</Label>
-                    <Select value={newExpense.type} onValueChange={(value) => setNewExpense({...newExpense, type: value})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="TOUR_COST">Chi phí tour</SelectItem>
-                        <SelectItem value="PARTNER">Chi phí đối tác</SelectItem>
-                        <SelectItem value="GUIDE">Chi phí HDV</SelectItem>
-                        <SelectItem value="STAFF">Chi phí nhân viên</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="amount">Số tiền (VNĐ)</Label>
+                    <Label htmlFor="tourType">Loại tour</Label>
                     <Input
-                      type="number"
-                      value={newExpense.amount}
-                      onChange={(e) => setNewExpense({...newExpense, amount: parseFloat(e.target.value)})}
-                      placeholder="Nhập số tiền..."
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label htmlFor="description">Mô tả</Label>
-                    <Textarea
-                      value={newExpense.description}
-                      onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
-                      placeholder="Mô tả chi tiết về chi phí..."
+                      value={tours.find(t => t.id === newExpense.tourId)?.type ?
+                        (tours.find(t => t.id === newExpense.tourId)?.type === 'GROUP' ? 'Tour ghép đoàn' :
+                         tours.find(t => t.id === newExpense.tourId)?.type === 'PRIVATE' ? 'Tour private' :
+                         tours.find(t => t.id === newExpense.tourId)?.type === 'ONE_ON_ONE' ? 'Tour 1-1' : '')
+                        : ''}
+                      disabled
+                      className="bg-gray-100"
                     />
                   </div>
                 </div>
-                <div className="flex justify-end space-x-2 mt-4">
-                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                    Hủy
-                  </Button>
-                  <Button onClick={handleCreateExpense}>
-                    Thêm Chi phí
-                  </Button>
+                <div>
+                  <Label htmlFor="type">Loại chi phí</Label>
+                  <Select value={newExpense.type} onValueChange={(value) => setNewExpense({...newExpense, type: value})}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TOUR_COST">Chi phí tour</SelectItem>
+                      <SelectItem value="PARTNER">Chi phí đối tác</SelectItem>
+                      <SelectItem value="GUIDE">Chi phí HDV</SelectItem>
+                      <SelectItem value="STAFF">Chi phí nhân viên</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <div>
+                  <Label htmlFor="amount">Số tiền (VNĐ)</Label>
+                  <Input
+                    type="number"
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({...newExpense, amount: parseFloat(e.target.value)})}
+                    placeholder="Nhập số tiền..."
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="description">Mô tả</Label>
+                  <Textarea
+                    value={newExpense.description}
+                    onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
+                    placeholder="Mô tả chi tiết về chi phí..."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-2 mt-4">
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Hủy
+                </Button>
+                <Button onClick={handleCreateExpense}>
+                  Thêm Chi phí
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
@@ -438,6 +502,13 @@ export default function ExpensesPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Create Order Dialog */}
+      <CreateOrderDialog
+        open={isCreateOrderDialogOpen}
+        onOpenChange={setIsCreateOrderDialogOpen}
+        onSuccess={fetchData}
+      />
     </div>
   )
 }
