@@ -43,21 +43,30 @@ const MusicPlayerContext = createContext<MusicPlayerContextType | undefined>(und
 export function MusicPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  const [playlist, setPlaylist] = useState<Song[]>([
-    {
-      id: '1',
-      title: 'You Can Be King Again',
-      artist: 'Hotarubi No Mori',
-      url: '/music/You Can Be King Again (From Hotarubi No Mori).mp3'
-    }
-  ])
-
-  const [currentSong, setCurrentSong] = useState<Song | null>(playlist[0])
+  const [playlist, setPlaylist] = useState<Song[]>([])
+  const [currentSong, setCurrentSong] = useState<Song | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolumeState] = useState(0.7)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isExpanded, setIsExpanded] = useState(false)
+
+  // Load playlist from API
+  useEffect(() => {
+    const fetchPlaylist = async () => {
+      try {
+        const response = await fetch('/api/songs')
+        const songs = await response.json()
+        if (Array.isArray(songs) && songs.length > 0) {
+          setPlaylist(songs)
+          setCurrentSong(songs[0])
+        }
+      } catch (error) {
+        console.error('Failed to load playlist:', error)
+      }
+    }
+    fetchPlaylist()
+  }, [])
 
   // Load volume from localStorage
   useEffect(() => {

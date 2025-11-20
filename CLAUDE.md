@@ -265,12 +265,20 @@ The application includes a custom music player that persists across page navigat
 - Location: `public/music/`
 - Format: `.mp3` files
 - Access: Direct URL path `/music/filename.mp3`
-- Currently loaded: "You Can Be King Again (From Hotarubi No Mori).mp3"
+- **Auto-discovery:** Songs are automatically loaded via `/api/songs` endpoint
 
 ### Adding New Songs
-1. Add `.mp3` files to `public/music/`
-2. Update playlist in [src/contexts/music-player-context.tsx](src/contexts/music-player-context.tsx) (line 45-52)
-3. Player will automatically include new songs in rotation
+1. Simply add `.mp3` files to `public/music/` folder
+2. Commit to Git (files must be tracked)
+3. Playlist will automatically update on next page load
+4. No code changes needed!
+
+### API Endpoint
+- `GET /api/songs` - Returns list of all `.mp3` files in `public/music/`
+- Auto-parses title/artist from filename patterns:
+  - `Artist - Title.mp3`
+  - `Title (Artist).mp3`
+  - Falls back to filename as title
 
 ## Common Issues
 
