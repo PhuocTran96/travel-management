@@ -44,6 +44,9 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   // Custom services
   const [customServices, setCustomServices] = useState<Array<{ id: string; name: string; price: number; quantity: number }>>([])
 
+  // Edited prices for "Liên hệ" services: { serviceId: price }
+  const [editedPrices, setEditedPrices] = useState<Record<string, number>>({})
+
   // Payment info
   const [discount, setDiscount] = useState(0) // Percentage
   const [paidAmount, setPaidAmount] = useState(0) // Amount paid
@@ -61,7 +64,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     address: '',
     gender: 'MALE' as 'MALE' | 'FEMALE',
     title: '',
-    country: '',
+    country: 'Vietnam',
     dateOfBirth: undefined as Date | undefined
   })
 
@@ -105,9 +108,24 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     ? Array.from(new Set(tourInfoList.map(t => t.tenTour)))
     : []
 
-  // Get available services for selected tour
+  // Get available services for selected tour, filtered by tour type
   const availableServices = Array.isArray(tourInfoList)
-    ? tourInfoList.filter(t => t.tenTour === selectedTourName)
+    ? tourInfoList.filter(t => {
+        if (t.tenTour !== selectedTourName) return false
+
+        // Filter by tour type
+        const dichVuLower = t.dichVu.toLowerCase()
+        if (tourData.type === 'ONE_ON_ONE') {
+          return dichVuLower.includes('1-1')
+        } else if (tourData.type === 'PRIVATE') {
+          return dichVuLower.includes('thiết kế riêng')
+        } else if (tourData.type === 'GROUP') {
+          return dichVuLower.includes('xe máy tự lái') ||
+                 dichVuLower.includes('xe máy xế chở') ||
+                 dichVuLower.includes('ô tô')
+        }
+        return false
+      })
     : []
 
   // Calculate total price from all selected services (catalog + custom)
@@ -116,8 +134,14 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     // Catalog services
     Object.entries(serviceQuantities).forEach(([serviceId, quantity]) => {
       const service = tourInfoList.find(t => t.id === serviceId)
-      if (service && service.gia !== 'Liên hệ') {
-        const price = parseFloat(service.gia.replace(/,/g, ''))
+      if (service) {
+        let price = 0
+        if (service.gia === 'Liên hệ') {
+          // Use edited price if available
+          price = editedPrices[serviceId] || 0
+        } else {
+          price = parseFloat(service.gia.replace(/,/g, ''))
+        }
         total += price * quantity
       }
     })
@@ -128,11 +152,9 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     return total
   }
 
-  // Calculate total guests from all selected services (catalog + custom)
+  // Calculate total guests from catalog services only (custom services are tour add-ons, not guest-based)
   const calculateTotalGuests = () => {
-    const catalogGuests = Object.values(serviceQuantities).reduce((sum, qty) => sum + qty, 0)
-    const customGuests = customServices.reduce((sum, service) => sum + service.quantity, 0)
-    return catalogGuests + customGuests
+    return Object.values(serviceQuantities).reduce((sum, qty) => sum + qty, 0)
   }
 
   // Calculate final price after discount
@@ -162,16 +184,12 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     return count
   }
 
-  // Initialize guest details when moving to review step
+  // Initialize guest details when moving to review step (only for catalog services, not custom add-ons)
   const initializeGuestDetails = () => {
     const details: Record<string, Array<{ name: string; phone: string }>> = {}
-    // Catalog services
+    // Catalog services only - custom services are tour add-ons and don't need guest info
     Object.entries(serviceQuantities).forEach(([serviceId, qty]) => {
       details[serviceId] = Array.from({ length: qty }, () => ({ name: '', phone: '' }))
-    })
-    // Custom services
-    customServices.filter(s => s.quantity > 0).forEach((service) => {
-      details[service.id] = Array.from({ length: service.quantity }, () => ({ name: '', phone: '' }))
     })
     setGuestDetails(details)
   }
@@ -236,13 +254,14 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
       address: '',
       gender: 'MALE',
       title: '',
-      country: '',
+      country: 'Vietnam',
       dateOfBirth: undefined
     })
     setTourData({ name: '', description: '', type: 'GROUP', maxGuests: 10, price: 0, startDate: '', endDate: '', status: 'UPCOMING' })
     setSelectedTourName('')
     setServiceQuantities({})
     setCustomServices([])
+    setEditedPrices({})
     setDiscount(0)
     setPaidAmount(0)
     setGuestDetails({})
@@ -282,24 +301,6 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
     setLoading(true)
     try {
-      // Step 0: Save custom services to TourInfo DB if they don't exist
-      for (const customService of customServices.filter(s => s.name.trim() !== '' && s.quantity > 0)) {
-        try {
-          await fetch('/api/tour-info', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tenTour: selectedTourName || 'Custom',
-              dichVu: customService.name,
-              gia: customService.price.toString(),
-              ghiChu: 'Dịch vụ tùy chỉnh'
-            })
-          })
-        } catch (err) {
-          console.error('Error saving custom service to DB:', err)
-        }
-      }
-
       // Step 1: Create customer
       const customerResponse = await fetch('/api/customers', {
         method: 'POST',
@@ -579,9 +580,9 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                       <SelectValue placeholder="Tháng" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                        <SelectItem key={month} value={month.toString()}>
-                          T{month}
+                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((monthName, index) => (
+                        <SelectItem key={index + 1} value={(index + 1).toString()}>
+                          {monthName}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -685,20 +686,41 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
             </div>
 
             {selectedTourName && (
-              <div className="space-y-2">
-                <Label>Dịch vụ *</Label>
-                <div className="border rounded-lg p-4 space-y-3 max-h-[400px] overflow-y-auto">
-                  {/* Catalog services */}
-                  {availableServices.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">Không có dịch vụ khả dụng từ catalog</p>
-                  ) : (
-                    availableServices.map((service) => (
+              <div className="space-y-4">
+                {/* Catalog Services Section */}
+                <div className="space-y-2">
+                  <Label>Dịch vụ từ Catalog *</Label>
+                  <div className="border rounded-lg p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                    {/* Catalog services */}
+                    {availableServices.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">Không có dịch vụ khả dụng từ catalog</p>
+                    ) : (
+                      availableServices.map((service) => (
                       <div key={service.id} className="flex items-start justify-between gap-4 p-3 border rounded-md bg-muted/30">
                         <div className="flex-1">
                           <p className="font-medium">{service.dichVu}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Giá: {service.gia}
-                          </p>
+                          {service.gia === 'Liên hệ' ? (
+                            <div className="mt-2">
+                              <Label className="text-xs">Nhập giá (VNĐ)</Label>
+                              <Input
+                                type="text"
+                                placeholder="Nhập giá..."
+                                value={editedPrices[service.id] ? formatNumber(editedPrices[service.id]) : ''}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, '')
+                                  setEditedPrices(prev => ({
+                                    ...prev,
+                                    [service.id]: value === '' ? 0 : parseInt(value)
+                                  }))
+                                }}
+                                className="mt-1"
+                              />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              Giá: {service.gia}
+                            </p>
+                          )}
                           {service.ghiChu && (
                             <p className="text-xs text-muted-foreground mt-1">
                               {service.ghiChu}
@@ -749,10 +771,20 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                         </div>
                       </div>
                     ))
-                  )}
+                    )}
+                  </div>
+                </div>
 
-                  {/* Custom services */}
-                  {customServices.map((service) => (
+                {/* Custom Services Section - Separate from catalog */}
+                <div className="space-y-2">
+                  <Label>Dịch vụ bổ sung (không tính vào số khách)</Label>
+                  <div className="border-2 border-dashed rounded-lg p-4 space-y-3 bg-amber-50/30">
+                    {customServices.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-2">
+                        Chưa có dịch vụ bổ sung
+                      </p>
+                    ) : (
+                      customServices.map((service) => (
                     <div key={service.id} className="flex items-start justify-between gap-4 p-3 border-2 border-dashed rounded-md bg-amber-50/50">
                       <div className="flex-1">
                         <Input
@@ -837,25 +869,27 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                         </Button>
                       </div>
                     </div>
-                  ))}
+                      ))
+                    )}
 
-                  {/* Nút thêm dịch vụ khác */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      const newId = `custom-${Date.now()}`
-                      setCustomServices([...customServices, { id: newId, name: '', price: 0, quantity: 0 }])
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Thêm dịch vụ khác
-                  </Button>
+                    {/* Nút thêm dịch vụ khác */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        const newId = `custom-${Date.now()}`
+                        setCustomServices([...customServices, { id: newId, name: '', price: 0, quantity: 0 }])
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Thêm dịch vụ bổ sung
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Tổng tiền và tổng số khách */}
-                <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div className="bg-primary/10 p-3 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">Tổng tiền</div>
                     <div className="text-xl font-bold">
@@ -936,15 +970,15 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                     </div>
                   )
                 })}
-                {/* Custom services */}
+                {/* Custom services - Dịch vụ bổ sung */}
                 {customServices.filter(s => s.quantity > 0).map((service) => (
-                  <div key={service.id} className="flex justify-between items-center py-2 border-b last:border-b-0">
+                  <div key={service.id} className="flex justify-between items-center py-2 border-b last:border-b-0 bg-amber-50/30">
                     <div>
-                      <p className="font-medium">{service.name}</p>
+                      <p className="font-medium">{service.name} <span className="text-xs text-muted-foreground">(Dịch vụ bổ sung)</span></p>
                       <p className="text-sm text-muted-foreground">Giá: {formatNumber(service.price)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium">{service.quantity} khách</p>
+                      <p className="font-medium">SL: {service.quantity}</p>
                     </div>
                   </div>
                 ))}
@@ -992,25 +1026,6 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                     return filledGuests.length > 0 ? (
                       <div key={serviceId} className="text-sm">
                         <span className="font-medium text-green-900">{service.dichVu}:</span>
-                        <div className="ml-4 mt-1 space-y-1">
-                          {filledGuests.map((guest, idx) => (
-                            <div key={idx} className="text-green-800">
-                              • {guest.name} - {guest.phone}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null
-                  })}
-
-                  {/* Custom service guests */}
-                  {customServices.filter(s => s.quantity > 0).map((service) => {
-                    const guests = guestDetails[service.id] || []
-                    const filledGuests = guests.filter(g => g.name.trim() !== '')
-
-                    return filledGuests.length > 0 ? (
-                      <div key={service.id} className="text-sm">
-                        <span className="font-medium text-green-900">{service.name}:</span>
                         <div className="ml-4 mt-1 space-y-1">
                           {filledGuests.map((guest, idx) => (
                             <div key={idx} className="text-green-800">
@@ -1167,38 +1182,6 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
               </div>
             )
           })}
-
-          {/* Guest details by service - Custom */}
-          {customServices.filter(s => s.quantity > 0).map((service) => (
-            <div key={service.id} className="space-y-3">
-              <Label className="text-base font-semibold">{service.name} ({service.quantity} khách)</Label>
-              <div className="space-y-3 pl-4 border-l-2 border-primary/30">
-                {Array.from({ length: service.quantity }).map((_, index) => (
-                  <div key={index} className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-sm font-medium mb-2">Khách #{index + 1}</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Tên</Label>
-                        <Input
-                          value={guestDetails[service.id]?.[index]?.name || ''}
-                          onChange={(e) => updateGuestDetail(service.id, index, 'name', e.target.value)}
-                          placeholder="Nhập tên khách"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Số điện thoại</Label>
-                        <Input
-                          value={guestDetails[service.id]?.[index]?.phone || ''}
-                          onChange={(e) => updateGuestDetail(service.id, index, 'phone', e.target.value)}
-                          placeholder="Nhập số điện thoại"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
 
         <div className="flex justify-end gap-2 mt-4">

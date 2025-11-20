@@ -175,26 +175,55 @@ The [src/components/ui/create-order-dialog.tsx](src/components/ui/create-order-d
 
 ### Step 1: Customer Info
 - Basic: Name, Email, Phone, Source, Address
-- Enhanced: Gender (dropdown), Title (input), Country (autocomplete with all world countries), Date of Birth (3 dropdowns)
+- Enhanced:
+  - Gender (dropdown: MALE/FEMALE)
+  - Title (input: Ông, Bà, Anh, Chị...)
+  - **Country**: Autocomplete with all world countries - **defaults to "Vietnam"**
+  - **Date of Birth**: 3 separate dropdowns (day, **month as 3-letter abbreviations: Jan/Feb/Mar...**, year)
 
 ### Step 2: Tour Selection
 - Fetches tour catalog from `/api/tour-info` (64 pre-loaded tours/services)
-- User selects tour name → Shows all available services for that tour
-- For each service: +/- buttons and manual input to specify quantity of guests
-- Displays running total: quantity × price for each service
-- Auto-calculates "Tổng số khách" (total guests) from sum of all service quantities
-- Auto-calculates total price from all selected services
-- Tour type, dates configured manually
+- User selects tour name → Tour type (GROUP/PRIVATE/ONE_ON_ONE) → **Services auto-filter based on tour type**
+
+**Service Filtering Logic:**
+- **Tour 1-1** (ONE_ON_ONE): Shows only services containing "1-1"
+- **Tour private** (PRIVATE): Shows only services containing "Thiết kế riêng"
+- **Tour ghép đoàn** (GROUP): Shows "Xe máy tự lái", "Xe máy xế chở", "Ô tô"
+
+**Two Service Types:**
+1. **Catalog Services** (Dịch vụ từ Catalog):
+   - Shows filtered services from TourInfo database
+   - Each service has +/- buttons and manual quantity input
+   - **"Liên hệ" price services** (like "Ô tô"): Manual price input field displayed
+   - Price is either from catalog or manually entered for "Liên hệ" services
+   - Each quantity = 1 guest (counts toward guest tracking)
+
+2. **Custom Services** (Dịch vụ bổ sung):
+   - Separate section below catalog services
+   - Dashed border with amber background for visual distinction
+   - User can add unlimited custom services with name, price, quantity
+   - **NOT saved to TourInfo database** (session-only, included in tour name when order created)
+   - **Does NOT count toward guest tracking** (these are tour add-ons, not guest-based)
+
+**Calculations:**
+- **Tổng số khách** (Total guests): Sum of catalog service quantities ONLY (excludes custom services)
+- **Tổng tiền** (Total price): Sum of (catalog services + custom services) × prices
 
 ### Step 3: Review (Xem lại)
 **Tour Summary:**
-- Displays tour name and all selected services with quantities
+- Displays tour name, tour type, and all selected services
+- Catalog services show quantity as "X khách"
+- Custom services show quantity as "SL: X" with "(Dịch vụ bổ sung)" label
 
 **Guest Information Tracking:**
 - Shows "X/Y khách đã có thông tin" (guests with details filled)
+- **Only applies to catalog services** (custom services excluded)
 - Leader (from step 1) is automatically counted as 1 guest with info
 - "Bổ sung thông tin" button opens nested dialog to fill details for remaining guests
-- Guest details dialog shows: Leader info (read-only), then input fields (name + phone) for each guest per service
+- Guest details dialog shows:
+  - Leader info (read-only)
+  - Input fields (name + phone) for each guest from **catalog services ONLY**
+  - **Custom services do NOT appear in guest details dialog**
 
 **Cost Summary (Tóm tắt chi phí):**
 - Tổng chi phí tạm tính (total cost before discount)
@@ -218,8 +247,18 @@ handleCreateOrder():
 
 The `TourInfo` collection contains 64 pre-loaded tour/service combinations imported from CSV:
 - **Fields**: stt (order), tenTour (tour name), dichVu (service), gia (price - can be "Liên hệ"), ghiChu (notes)
-- **Usage**: Powers cascading dropdowns in order creation workflow
-- **Data source**: Originally imported from `tour_info.csv` (import script was deleted after one-time use)
+- **Usage**: Powers cascading dropdowns and service filtering in order creation workflow
+- **Data source**: `tour_info.csv` - can be re-imported using `npx tsx scripts/import-tour-info.ts`
+- **Import script**: [scripts/import-tour-info.ts](scripts/import-tour-info.ts) - clears existing data and imports all 64 records
+
+**Service Name Patterns for Filtering:**
+- **ONE_ON_ONE services**: Contains "1-1" in dichVu field
+- **PRIVATE services**: Contains "Thiết kế riêng" or "thiết kế riêng" in dichVu field
+- **GROUP services**: Contains "Xe máy tự lái", "Xe máy xế chở", or "Ô tô" in dichVu field
+
+**Price Handling:**
+- Most services have numeric prices (with commas): "2,900,000"
+- Some services (like "Ô tô") have "Liên hệ" as price → requires manual price input in UI
 
 ## Socket.IO Integration
 
