@@ -69,6 +69,8 @@ The application uses a **custom Next.js server** ([server.ts](server.ts)) that i
 - `Customer`: Customers with auto-generated unique codes (`KH0001`, `KH0002`, etc.) including gender, title, country, and date of birth
 - `Tour`: Tours with type (GROUP/PRIVATE/ONE_ON_ONE), capacity, dates, and status
 - `Booking`: Links customers to tours with deposit and payment tracking
+- `BookingService`: Stores service details per booking (price, quantity, isCustom) - enables editing of "Liên hệ" and custom service prices
+- `Guest`: Individual guest information per booking (name, phone, serviceId)
 - `Expense`: Tour-related expenses categorized by type (TOUR_COST, PARTNER, GUIDE, STAFF)
 - `TourInfo`: Pre-loaded tour catalog with 64 tours/services, prices, and notes (imported from CSV)
 
@@ -106,14 +108,52 @@ Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for 
 
 ### Key Pages
 - `/` - Dashboard with statistics and overview
-- `/tours` - Order management (Quản lý Đơn hàng) - displays all tours/bookings created
+- `/tours` - Order management (Quản lý Đơn hàng) - displays all tours/bookings in **table format**
 - `/expenses` - Expense tracking
+
+## Order Management Page (`/tours`)
+
+The order management page ([src/app/tours/page.tsx](src/app/tours/page.tsx)) displays all tours in a table layout:
+
+### Table Columns
+| Column | Description |
+|--------|-------------|
+| Tên Tour | Tour name (truncated with `...` if too long, full name in tooltip) |
+| Loại Tour | Tour type: "Tour ghép đoàn", "Tour private", "Tour 1-1" |
+| Trưởng nhóm | Leader name from first booking's customer |
+| SĐT | Leader's phone number |
+| Start Date | Tour start date (DD-MM-YYYY format) |
+| End Date | Tour end date (DD-MM-YYYY format) |
+| Status | Badge: "Sắp diễn ra", "Đang diễn ra", "Hoàn thành" |
+| Thanh toán | "Đủ" (green) or remaining amount in red (e.g., "4,500,000") |
+| Thao tác | Edit and Delete buttons |
+
+### Payment Calculation
+```typescript
+const totalPrice = tour.bookings.reduce((sum, b) => sum + b.totalPrice, 0)
+const totalDeposit = tour.bookings.reduce((sum, b) => sum + b.deposit, 0)
+const remaining = totalPrice - totalDeposit
+// If remaining <= 0: "Đủ" (green)
+// If remaining > 0: show remaining amount (red)
+```
+
+### Filters
+- Search by tour name
+- Filter by status (Tất cả / Sắp diễn ra / Đang diễn ra / Hoàn thành)
+- Filter by tour type (Tất cả / Tour ghép đoàn / Tour private / Tour 1-1)
+- NavBar filters: Date range, Leader name
 
 **Page Branding:**
 - All pages share consistent header with logo.png (h-16), gradient green background (from-green-100 via-green-50 to-white)
+- **Logo is clickable** - navigates back to Dashboard (`/`)
 - Header includes: "Hi, Thanh" greeting (gradient pink-purple, animated pulse), circular "Tạo đơn hàng" button (Plus icon), "Đăng xuất" button
-- Navigation bar with: Dashboard, Quản lý Đơn hàng, Quản lý Chi phí
+- **NavBar Component** ([src/components/ui/nav-bar.tsx](src/components/ui/nav-bar.tsx)): Shared navigation with hamburger dropdown menu (☰) and integrated filters
 - Favicon: icon.png
+
+**Navigation (NavBar):**
+- Hamburger menu (☰) with dropdown containing: Dashboard, Quản lý Đơn hàng, Quản lý Chi phí
+- Integrated filters in nav bar: Date range (Từ ngày, Đến ngày), Leader name search with autocomplete, Clear filters button
+- Search input uses magnify icon instead of label
 
 ## Important Notes
 
@@ -230,6 +270,7 @@ The [src/components/ui/create-order-dialog.tsx](src/components/ui/create-order-d
 - Chiết khấu (discount % - manual input)
 - Tổng sau chiết khấu (total after discount)
 - Khách đã thanh toán (amount paid - manual input with auto-formatting for numbers >1000)
+  - **"Điền đủ" button** - auto-fills with "Tổng sau chiết khấu" amount for quick input
 - Còn lại (remaining balance)
 
 ### Persistence Flow
@@ -242,6 +283,41 @@ handleCreateOrder():
 ```
 
 **Critical**: Do NOT save after each step. All data must be saved atomically at the end after completing all 3 steps.
+
+### Service Data Persistence (BookingService)
+When creating or editing orders, service details are saved to `BookingService` collection:
+```typescript
+// Service data structure saved to DB
+{
+  serviceId: string | null,  // TourInfo ID (null for custom services)
+  serviceName: string,       // Service display name
+  price: number,             // Unit price (important for "Liên hệ" services)
+  quantity: number,          // Number of guests/items
+  isCustom: boolean          // true for custom add-on services
+}
+```
+
+**Why BookingService exists:**
+- "Liên hệ" services have no predefined price - user enters manually
+- Custom services are completely user-defined
+- Without storing prices, editing orders would lose pricing information
+
+## Multi-Step Order Edit Workflow
+
+The [src/components/ui/edit-order-dialog.tsx](src/components/ui/edit-order-dialog.tsx) mirrors the create workflow:
+
+### Loading Data
+1. Fetches tour data from `/api/tours/{id}` (includes bookings with services)
+2. Loads services from `booking.services` array
+3. Separates catalog services (has serviceId) from custom services (isCustom=true)
+4. For "Liên hệ" services, loads stored price into `editedPrices` state
+
+### Saving Changes
+1. Updates customer via `/api/customers/{id}`
+2. Updates tour via `/api/tours/{id}` (name includes services list)
+3. Updates booking via `/api/bookings/{id}`:
+   - Replaces all services (delete existing + create new)
+   - Updates guests, deposit, totalPrice, status
 
 ## Tour Catalog System
 
@@ -290,15 +366,17 @@ The dashboard ([src/app/page.tsx](src/app/page.tsx)) provides comprehensive anal
 ### Dashboard Features
 
 **Statistics Cards:**
-- Tổng Khách hàng - Unique guests count (calculated from Guest table by name+phone)
-- Tổng Đơn hàng - Total tours count
-- Lợi nhuận gộp - Gross profit (revenue - expenses)
-- Doanh thu - Total revenue from bookings
+- Tổng Khách hàng - Unique guests count (calculated from Guest table by name+phone) → Link to `/tours`
+- Tổng Đơn hàng - Total tours count → Link to `/tours`
+- Lợi nhuận gộp - Gross profit (revenue - expenses) → Link to `/expenses`
+- Doanh thu - Total revenue from bookings → Link to `/expenses`
+- Each card has "Chi tiết" link in top-right corner (no tooltip icons)
 
 **Filters:**
+- Integrated in NavBar component (not separate filter area)
 - Date range filter (Từ ngày - Đến ngày)
-- Leader name autocomplete filter
-- Clear filters button
+- Leader name autocomplete filter with Search icon
+- Clear filters button (Xóa bộ lọc)
 
 ### Dashboard Tabs
 

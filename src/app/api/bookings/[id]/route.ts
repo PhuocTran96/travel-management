@@ -48,13 +48,38 @@ export async function PUT(
       )
     }
 
-    // Return updated booking with guests
+    // Update services if provided
+    if (data.services && Array.isArray(data.services)) {
+      // Delete existing services
+      await db.bookingService.deleteMany({
+        where: { bookingId: id }
+      })
+
+      // Create new services
+      await Promise.all(
+        data.services.map((service: any) =>
+          db.bookingService.create({
+            data: {
+              bookingId: id,
+              serviceId: service.serviceId || null,
+              serviceName: service.serviceName,
+              price: service.price,
+              quantity: service.quantity,
+              isCustom: service.isCustom || false
+            }
+          })
+        )
+      )
+    }
+
+    // Return updated booking with guests and services
     const updatedBooking = await db.booking.findUnique({
       where: { id },
       include: {
         customer: true,
         tour: true,
-        guests: true
+        guests: true,
+        services: true
       }
     })
 

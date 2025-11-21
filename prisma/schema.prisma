@@ -65,6 +65,24 @@ model Booking {
   customer    Customer     @relation(fields: [customerId], references: [id])
   tour        Tour         @relation(fields: [tourId], references: [id])
   guests      Guest[]
+  services    BookingService[]
+}
+
+// Chi tiết dịch vụ trong booking (lưu giá của dịch vụ "Liên hệ" và custom services)
+model BookingService {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId     String   @db.ObjectId
+  serviceId     String?  @db.ObjectId  // ID từ TourInfo (null nếu là custom service)
+  serviceName   String   // Tên dịch vụ
+  price         Float    // Giá đơn vị
+  quantity      Int      // Số lượng
+  isCustom      Boolean  @default(false) // true nếu là dịch vụ bổ sung (custom)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_services")
 }
 
 // Guest details for each booking

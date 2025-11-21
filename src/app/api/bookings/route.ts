@@ -38,12 +38,23 @@ export async function POST(request: NextRequest) {
             phone: guest.phone,
             serviceId: guest.serviceId
           }))
+        } : undefined,
+        // Lưu chi tiết dịch vụ (bao gồm giá của dịch vụ "Liên hệ" và custom services)
+        services: data.services ? {
+          create: data.services.map((service: { serviceId?: string; serviceName: string; price: number; quantity: number; isCustom: boolean }) => ({
+            serviceId: service.serviceId || null,
+            serviceName: service.serviceName,
+            price: service.price,
+            quantity: service.quantity,
+            isCustom: service.isCustom
+          }))
         } : undefined
       },
       include: {
         customer: true,
         tour: true,
-        guests: true
+        guests: true,
+        services: true
       }
     })
 

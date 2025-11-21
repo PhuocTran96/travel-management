@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Calendar, Users, Search, MapPin, DollarSign, Clock, TrendingUp, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Search, Plus, Pencil, Trash2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
 import { EditOrderDialog } from '@/components/ui/edit-order-dialog'
+import { NavBar } from '@/components/ui/nav-bar'
 import { MusicPlayer } from '@/components/providers/client-layout'
 
 export default function ToursPage() {
@@ -21,6 +22,11 @@ export default function ToursPage() {
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [selectedTour, setSelectedTour] = useState(null)
+
+  // Filter states for NavBar
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [leaderName, setLeaderName] = useState('')
 
   useEffect(() => {
     fetchTours()
@@ -50,7 +56,19 @@ export default function ToursPage() {
     const matchesSearch = tour.name?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || tour.status === statusFilter
     const matchesType = typeFilter === 'all' || tour.type === typeFilter
-    return matchesSearch && matchesStatus && matchesType
+
+    // Filter by leader name from NavBar
+    const matchesLeader = !leaderName ||
+      tour.bookings?.some((booking: any) =>
+        booking.customer?.name?.toLowerCase().includes(leaderName.toLowerCase())
+      )
+
+    // Filter by date range from NavBar
+    const tourEndDate = new Date(tour.endDate)
+    const matchesStartDate = !startDate || tourEndDate >= new Date(startDate)
+    const matchesEndDate = !endDate || tourEndDate <= new Date(endDate)
+
+    return matchesSearch && matchesStatus && matchesType && matchesLeader && matchesStartDate && matchesEndDate
   }) : []
 
   const getStatusColor = (status) => {
@@ -80,11 +98,28 @@ export default function ToursPage() {
     }
   }
 
-  const getAvailabilityColor = (booked, max) => {
-    const percentage = (booked / max) * 100
-    if (percentage >= 100) return 'destructive'
-    if (percentage >= 80) return 'secondary'
-    return 'default'
+  const formatDate = (dateString) => {
+    const date = new Date(dateString)
+    const day = date.getDate().toString().padStart(2, '0')
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const year = date.getFullYear()
+    return `${day}-${month}-${year}`
+  }
+
+  const getPaymentStatus = (tour) => {
+    const totalPrice = tour.bookings?.reduce((sum, b) => sum + (b.totalPrice || 0), 0) || 0
+    const totalDeposit = tour.bookings?.reduce((sum, b) => sum + (b.deposit || 0), 0) || 0
+    const remaining = totalPrice - totalDeposit
+    if (remaining <= 0) return { text: 'Đủ', color: 'text-green-600' }
+    return { text: remaining.toLocaleString(), color: 'text-red-600' }
+  }
+
+  const getLeaderInfo = (tour) => {
+    const firstBooking = tour.bookings?.[0]
+    return {
+      name: firstBooking?.customer?.name || '-',
+      phone: firstBooking?.customer?.phone || '-'
+    }
   }
 
   const handleEdit = (tour) => {
@@ -124,9 +159,9 @@ export default function ToursPage() {
       <header className="bg-gradient-to-r from-green-100 via-green-50 to-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            <div className="flex items-center">
-              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16" />
-            </div>
+            <a href="/" className="flex items-center">
+              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16 cursor-pointer" />
+            </a>
             <div className="flex items-center space-x-4">
               <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
                 Hi, Thanh
@@ -154,29 +189,21 @@ export default function ToursPage() {
         </div>
       </header>
 
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            <Button variant="ghost" asChild>
-              <a href="/">
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Dashboard
-              </a>
-            </Button>
-            <Button variant="ghost" className="text-blue-600">
-              <MapPin className="w-4 h-4 mr-2" />
-              Quản lý Đơn hàng
-            </Button>
-            <Button variant="ghost" asChild>
-              <a href="/expenses">
-                <DollarSign className="w-4 h-4 mr-2" />
-                Quản lý Chi phí
-              </a>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      {/* Navigation + Filters */}
+      <NavBar
+        currentPage="tours"
+        startDate={startDate}
+        endDate={endDate}
+        leaderName={leaderName}
+        onStartDateChange={setStartDate}
+        onEndDateChange={setEndDate}
+        onLeaderNameChange={setLeaderName}
+        onClearFilters={() => {
+          setStartDate('')
+          setEndDate('')
+          setLeaderName('')
+        }}
+      />
 
       {/* Filters */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -216,113 +243,67 @@ export default function ToursPage() {
           </Select>
         </div>
 
-        {/* Tours Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTours.map((tour) => (
-            <Card key={tour.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{tour.name}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {getTypeText(tour.type)}
-                    </CardDescription>
-                  </div>
-                  <Badge variant={getStatusColor(tour.status)}>
-                    {getStatusText(tour.status)}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {tour.description && (
-                    <p className="text-sm text-gray-600 line-clamp-2">{tour.description}</p>
-                  )}
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span>{new Date(tour.startDate).toLocaleDateString('vi-VN')}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-gray-400" />
-                      <span>{new Date(tour.endDate).toLocaleDateString('vi-VN')}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm">
-                        {tour.bookedGuests}/{tour.maxGuests} khách
-                      </span>
-                    </div>
-                    <Badge variant={getAvailabilityColor(tour.bookedGuests, tour.maxGuests)}>
-                      {tour.maxGuests - tour.bookedGuests} chỗ trống
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-gray-400" />
-                      <span className="font-semibold">{tour.price.toLocaleString()}đ</span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar for group tours */}
-                  {tour.type === 'GROUP' && (
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min((tour.bookedGuests / tour.maxGuests) * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  )}
-
-                  {/* Financial summary */}
-                  <div className="bg-gray-50 p-3 rounded-lg space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span>Doanh thu:</span>
-                      <span className="font-medium">{tour.totalRevenue?.toLocaleString() || 0}đ</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Chi phí:</span>
-                      <span className="font-medium">{tour.totalExpenses?.toLocaleString() || 0}đ</span>
-                    </div>
-                    <div className="flex justify-between text-sm font-bold">
-                      <span>Lợi nhuận:</span>
-                      <span className={tour.profit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {tour.profit?.toLocaleString() || 0}đ
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleEdit(tour)}
-                    >
-                      <Pencil className="w-4 h-4 mr-2" />
-                      Sửa
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleDelete(tour.id)}
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Xóa
-                    </Button>
-                  </div>
-
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        {/* Tours Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[200px]">Tên Tour</TableHead>
+                <TableHead>Loại Tour</TableHead>
+                <TableHead>Trưởng nhóm</TableHead>
+                <TableHead>SĐT</TableHead>
+                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Thanh toán</TableHead>
+                <TableHead className="text-right">Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTours.map((tour) => {
+                const leader = getLeaderInfo(tour)
+                const payment = getPaymentStatus(tour)
+                return (
+                  <TableRow key={tour.id}>
+                    <TableCell className="font-medium max-w-[200px] truncate" title={tour.name}>
+                      {tour.name}
+                    </TableCell>
+                    <TableCell>{getTypeText(tour.type)}</TableCell>
+                    <TableCell>{leader.name}</TableCell>
+                    <TableCell>{leader.phone}</TableCell>
+                    <TableCell>{formatDate(tour.startDate)}</TableCell>
+                    <TableCell>{formatDate(tour.endDate)}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusColor(tour.status)}>
+                        {getStatusText(tour.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className={payment.color + ' font-medium'}>
+                      {payment.text}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(tour)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(tour.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
         </div>
 
         {filteredTours.length === 0 && (

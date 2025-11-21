@@ -106,12 +106,12 @@ export function EditOrderDialog({ open, onOpenChange, tourId, onSuccess }: EditO
     fetchTourInfo()
   }, [])
 
-  // Load existing tour data when dialog opens
+  // Load existing tour data when dialog opens AND tourInfoList is loaded
   useEffect(() => {
-    if (open && tourId && !initialDataLoaded) {
+    if (open && tourId && !initialDataLoaded && tourInfoList.length > 0) {
       loadTourData()
     }
-  }, [open, tourId])
+  }, [open, tourId, tourInfoList])
 
   const loadTourData = async () => {
     try {
@@ -132,42 +132,55 @@ export function EditOrderDialog({ open, onOpenChange, tourId, onSuccess }: EditO
           status: tour.status || 'UPCOMING'
         })
 
+        // Parse services - declare outside so we can use in booking section
+        let parsedQuantities: Record<string, number> = {}
+        let parsedCustomServices: Array<{ id: string; name: string; price: number; quantity: number }> = []
+
         // Extract tour name and services from full name
         // Format: "Tour Name - Service1 (x2), Service2 (x1), Custom Service (x3)"
         if (tour.name) {
+          console.log('Parsing tour name:', tour.name)
+          console.log('TourInfoList length:', tourInfoList.length)
+
           const match = tour.name.match(/^(.+?)\s*-\s*(.+)$/)
           if (match) {
             const tourName = match[1].trim()
             const servicesStr = match[2].trim()
 
+            console.log('Extracted tour name:', tourName)
+            console.log('Services string:', servicesStr)
+
             setSelectedTourName(tourName)
 
             // Parse services and quantities
-            const serviceMatches = servicesStr.matchAll(/([^,]+?)\s*\(x(\d+)\)/g)
-            const parsedQuantities: Record<string, number> = {}
-            const parsedCustomServices: Array<{ id: string; name: string; price: number; quantity: number }> = []
+            const serviceMatches = [...servicesStr.matchAll(/([^,]+?)\s*\(x(\d+)\)/g)]
 
             for (const serviceMatch of serviceMatches) {
               const serviceName = serviceMatch[1].trim()
               const quantity = parseInt(serviceMatch[2])
 
-              // Check if this is a custom service (dịch vụ bổ sung)
-              // Custom services are those not in the tour catalog
-              const catalogService = tourInfoList.find(t => t.dichVu === serviceName)
+              // Check if this is a catalog service for the selected tour
+              // Must match both tour name (tenTour) and service name (dichVu)
+              const catalogService = tourInfoList.find(t =>
+                t.tenTour === tourName && t.dichVu === serviceName
+              )
 
               if (catalogService) {
                 // This is a catalog service
                 parsedQuantities[catalogService.id] = quantity
               } else {
-                // This is a custom service
+                // This is a custom service (not in catalog for this tour)
                 parsedCustomServices.push({
-                  id: `custom-${Date.now()}-${Math.random()}`,
+                  id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                   name: serviceName,
-                  price: 0, // We don't have the original price, will need to recalculate
+                  price: 0, // We don't have the original price, user needs to re-enter
                   quantity: quantity
                 })
               }
             }
+
+            console.log('Parsed catalog services:', parsedQuantities)
+            console.log('Parsed custom services:', parsedCustomServices)
 
             setServiceQuantities(parsedQuantities)
             setCustomServices(parsedCustomServices)
@@ -212,8 +225,47 @@ export function EditOrderDialog({ open, onOpenChange, tourId, onSuccess }: EditO
             setGuestDetails(guestsByService)
           }
 
-          // Calculate discount from booking
-          if (tour.price > 0) {
+          // Load services from DB (new approach - much simpler!)
+          if (booking.services && booking.services.length > 0) {
+            console.log('Loading services from DB:', booking.services)
+
+            const loadedQuantities: Record<string, number> = {}
+            const loadedEditedPrices: Record<string, number> = {}
+            const loadedCustomServices: Array<{ id: string; name: string; price: number; quantity: number }> = []
+
+            booking.services.forEach((service: any) => {
+              if (service.isCustom) {
+                // Custom service
+                loadedCustomServices.push({
+                  id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  name: service.serviceName,
+                  price: service.price,
+                  quantity: service.quantity
+                })
+              } else if (service.serviceId) {
+                // Catalog service
+                loadedQuantities[service.serviceId] = service.quantity
+
+                // Check if this service has "Liên hệ" price in catalog
+                const catalogService = tourInfoList.find(t => t.id === service.serviceId)
+                if (catalogService && catalogService.gia === 'Liên hệ') {
+                  loadedEditedPrices[service.serviceId] = service.price
+                }
+              }
+            })
+
+            // Override parsed values with DB values
+            setServiceQuantities(loadedQuantities)
+            setEditedPrices(loadedEditedPrices)
+            setCustomServices(loadedCustomServices)
+
+            console.log('Loaded quantities:', loadedQuantities)
+            console.log('Loaded edited prices:', loadedEditedPrices)
+            console.log('Loaded custom services:', loadedCustomServices)
+          }
+
+          // Calculate discount: if booking.totalPrice < tour.price, there was a discount
+          if (tour.price > 0 && booking.totalPrice < tour.price) {
             const discountPercent = ((tour.price - booking.totalPrice) / tour.price) * 100
             setDiscount(Math.round(discountPercent * 100) / 100)
           }
@@ -490,6 +542,45 @@ export function EditOrderDialog({ open, onOpenChange, tourId, onSuccess }: EditO
       })
 
       if (bookingId) {
+        // Prepare services list for saving
+        const servicesList: Array<{
+          serviceId?: string
+          serviceName: string
+          price: number
+          quantity: number
+          isCustom: boolean
+        }> = []
+
+        // Add catalog services
+        Object.entries(serviceQuantities).forEach(([serviceId, quantity]) => {
+          const service = tourInfoList.find(t => t.id === serviceId)
+          if (service) {
+            let price = 0
+            if (service.gia === 'Liên hệ') {
+              price = editedPrices[serviceId] || 0
+            } else {
+              price = parseFloat(service.gia.replace(/,/g, ''))
+            }
+            servicesList.push({
+              serviceId: serviceId,
+              serviceName: service.dichVu,
+              price: price,
+              quantity: quantity,
+              isCustom: false
+            })
+          }
+        })
+
+        // Add custom services
+        customServices.filter(s => s.quantity > 0 && s.name.trim() !== '').forEach(service => {
+          servicesList.push({
+            serviceName: service.name,
+            price: service.price,
+            quantity: service.quantity,
+            isCustom: true
+          })
+        })
+
         await fetch(`/api/bookings/${bookingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -498,7 +589,8 @@ export function EditOrderDialog({ open, onOpenChange, tourId, onSuccess }: EditO
             totalPrice: finalPrice,
             status: paidAmount >= finalPrice ? 'Đã thanh toán đủ' : 'Chưa thanh toán đủ',
             notes: tourData.description || '',
-            guests: guestList
+            guests: guestList,
+            services: servicesList
           })
         })
       }

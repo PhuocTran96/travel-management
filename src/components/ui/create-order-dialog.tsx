@@ -376,6 +376,45 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
         })
       })
 
+      // Prepare services list for saving
+      const servicesList: Array<{
+        serviceId?: string
+        serviceName: string
+        price: number
+        quantity: number
+        isCustom: boolean
+      }> = []
+
+      // Add catalog services
+      Object.entries(serviceQuantities).forEach(([serviceId, quantity]) => {
+        const service = tourInfoList.find(t => t.id === serviceId)
+        if (service) {
+          let price = 0
+          if (service.gia === 'Liên hệ') {
+            price = editedPrices[serviceId] || 0
+          } else {
+            price = parseFloat(service.gia.replace(/,/g, ''))
+          }
+          servicesList.push({
+            serviceId: serviceId,
+            serviceName: service.dichVu,
+            price: price,
+            quantity: quantity,
+            isCustom: false
+          })
+        }
+      })
+
+      // Add custom services
+      customServices.filter(s => s.quantity > 0 && s.name.trim() !== '').forEach(service => {
+        servicesList.push({
+          serviceName: service.name,
+          price: service.price,
+          quantity: service.quantity,
+          isCustom: true
+        })
+      })
+
       const bookingResponse = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -384,9 +423,10 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
           tourId: tourResult.id,
           deposit: paidAmount,
           totalPrice: finalPrice,
-          status: paidAmount >= finalPrice ? 'Đã thanh toán đủ' : 'Chưa thanh toán đủ',
+          status: paidAmount >= finalPrice ? 'CONFIRMED' : 'PENDING',
           notes: tourData.description || '',
-          guests: guestList
+          guests: guestList,
+          services: servicesList
         })
       })
 
@@ -1098,6 +1138,16 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                 <div className="flex justify-between items-center gap-4">
                   <span className="text-muted-foreground">Khách đã thanh toán:</span>
                   <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      onClick={() => setPaidAmount(calculateDiscountedPrice())}
+                      title="Điền tổng sau chiết khấu"
+                    >
+                      Điền đủ
+                    </Button>
                     <Input
                       type="text"
                       value={paidAmount === 0 ? '' : formatNumber(paidAmount)}

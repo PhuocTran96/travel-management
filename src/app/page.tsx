@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Users, DollarSign, TrendingUp, MapPin, Phone, Mail, Facebook, Instagram, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
+import { NavBar } from '@/components/ui/nav-bar'
 import { MusicPlayer } from '@/components/providers/client-layout'
 
 interface RecentBooking {
@@ -64,8 +64,6 @@ export default function Home() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [leaderName, setLeaderName] = useState('')
-  const [leaderNames, setLeaderNames] = useState<string[]>([])
-  const [showLeaderDropdown, setShowLeaderDropdown] = useState(false)
 
   // Helper function to normalize status
   const getDisplayStatus = (status: string) => {
@@ -120,23 +118,6 @@ export default function Home() {
     return diffDays
   }
 
-  // Fetch leader names for autocomplete
-  useEffect(() => {
-    const fetchLeaderNames = async () => {
-      try {
-        const response = await fetch('/api/customers')
-        const data = await response.json()
-        if (Array.isArray(data)) {
-          const names = [...new Set(data.map((c: any) => c.name))].sort()
-          setLeaderNames(names)
-        }
-      } catch (error) {
-        console.error('Error fetching leader names:', error)
-      }
-    }
-    fetchLeaderNames()
-  }, [])
-
   useEffect(() => {
     fetchDashboardData()
   }, [startDate, endDate, leaderName])
@@ -175,9 +156,9 @@ export default function Home() {
       <header className="bg-gradient-to-r from-green-100 via-green-50 to-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            <div className="flex items-center">
-              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16" />
-            </div>
+            <a href="/" className="flex items-center">
+              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16 cursor-pointer" />
+            </a>
             <div className="flex items-center space-x-4">
               <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
                 Hi, Thanh
@@ -205,105 +186,24 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            <Button variant="ghost" className="text-blue-600">
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Dashboard
-            </Button>
-            <Button variant="ghost" asChild>
-              <a href="/tours">
-                <MapPin className="w-4 h-4 mr-2" />
-                Quản lý Đơn hàng
-              </a>
-            </Button>
-            <Button variant="ghost" asChild>
-              <a href="/expenses">
-                <DollarSign className="w-4 h-4 mr-2" />
-                Quản lý Chi phí
-              </a>
-            </Button>
-          </div>
-        </div>
-      </nav>
+      {/* Navigation + Filters */}
+      <NavBar
+        currentPage="dashboard"
+        startDate={startDate}
+        endDate={endDate}
+        leaderName={leaderName}
+        onStartDateChange={setStartDate}
+        onEndDateChange={setEndDate}
+        onLeaderNameChange={setLeaderName}
+        onClearFilters={() => {
+          setStartDate('')
+          setEndDate('')
+          setLeaderName('')
+        }}
+      />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters */}
-        <div className="mb-6 bg-white rounded-lg shadow-sm border p-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium whitespace-nowrap">Từ ngày:</label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-40 h-9"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium whitespace-nowrap">Đến ngày:</label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-40 h-9"
-              />
-            </div>
-            <div className="flex items-center gap-2 relative">
-              <label className="text-sm font-medium whitespace-nowrap">Trưởng nhóm:</label>
-              <div className="relative">
-                <Input
-                  type="text"
-                  value={leaderName}
-                  onChange={(e) => {
-                    setLeaderName(e.target.value)
-                    setShowLeaderDropdown(true)
-                  }}
-                  onFocus={() => setShowLeaderDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowLeaderDropdown(false), 200)}
-                  placeholder="Tìm theo tên..."
-                  className="w-48 h-9"
-                />
-                {showLeaderDropdown && leaderName && leaderNames.filter(name =>
-                  name.toLowerCase().includes(leaderName.toLowerCase())
-                ).length > 0 && (
-                  <div className="absolute top-full left-0 mt-1 w-full bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto z-50">
-                    {leaderNames
-                      .filter(name => name.toLowerCase().includes(leaderName.toLowerCase()))
-                      .slice(0, 10)
-                      .map((name, idx) => (
-                        <div
-                          key={idx}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                          onMouseDown={() => {
-                            setLeaderName(name)
-                            setShowLeaderDropdown(false)
-                          }}
-                        >
-                          {name}
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setStartDate('')
-                setEndDate('')
-                setLeaderName('')
-              }}
-              className="h-9"
-            >
-              Xóa bộ lọc
-            </Button>
-          </div>
-        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -316,50 +216,40 @@ export default function Home() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Tổng Khách hàng</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <a href="/tours" className="text-xs text-blue-600 hover:underline">Chi tiết</a>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalCustomers}</div>
-              <p className="text-xs text-muted-foreground">Tổng số khách hàng trong hệ thống</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Tổng Đơn hàng</CardTitle>
-              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <a href="/tours" className="text-xs text-blue-600 hover:underline">Chi tiết</a>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalOrders}</div>
-              <p className="text-xs text-muted-foreground">
-                {startDate || endDate ? 'Đơn hàng trong khoảng thời gian' : 'Tổng số đơn hàng'}
-              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Lợi nhuận gộp</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <a href="/expenses" className="text-xs text-blue-600 hover:underline">Chi tiết</a>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.grossProfit.toLocaleString()}đ</div>
-              <p className="text-xs text-muted-foreground">
-                Doanh thu ({stats.totalRevenue.toLocaleString()}đ) - Chi phí ({stats.totalExpenses.toLocaleString()}đ)
-              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Doanh thu</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <a href="/expenses" className="text-xs text-blue-600 hover:underline">Chi tiết</a>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalRevenue.toLocaleString()}đ</div>
-              <p className="text-xs text-muted-foreground">
-                {startDate || endDate ? 'Doanh thu trong khoảng thời gian' : 'Tổng doanh thu'}
-              </p>
             </CardContent>
           </Card>
         </div>

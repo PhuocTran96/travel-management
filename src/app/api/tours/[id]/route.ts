@@ -14,7 +14,8 @@ export async function GET(
         bookings: {
           include: {
             customer: true,
-            guests: true
+            guests: true,
+            services: true
           }
         },
         expenses: true

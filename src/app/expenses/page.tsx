@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, Search, DollarSign, TrendingDown, TrendingUp, Calendar, MapPin, Users, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, DollarSign, TrendingDown, Calendar, MapPin, Users, Pencil, Trash2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
 import { EditExpenseDialog } from '@/components/ui/edit-expense-dialog'
+import { NavBar } from '@/components/ui/nav-bar'
 import { MusicPlayer } from '@/components/providers/client-layout'
 
 export default function ExpensesPage() {
@@ -27,6 +28,11 @@ export default function ExpensesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [tourFilter, setTourFilter] = useState('all')
+
+  // Filter states for NavBar
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [leaderName, setLeaderName] = useState('')
 
   const [expenseList, setExpenseList] = useState([{
     id: Date.now().toString(),
@@ -149,7 +155,20 @@ export default function ExpensesPage() {
                          expense.tour?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesType = typeFilter === 'all' || expense.type === typeFilter
     const matchesTour = tourFilter === 'all' || expense.tourId === tourFilter
-    return matchesSearch && matchesType && matchesTour
+
+    // Filter by leader name from NavBar (search in tour's bookings)
+    const matchesLeader = !leaderName ||
+      expense.tour?.bookings?.some((booking: any) =>
+        booking.customer?.name?.toLowerCase().includes(leaderName.toLowerCase())
+      ) ||
+      expense.tour?.name?.toLowerCase().includes(leaderName.toLowerCase())
+
+    // Filter by date range from NavBar (based on expense creation date)
+    const expenseDate = new Date(expense.createdAt)
+    const matchesStartDate = !startDate || expenseDate >= new Date(startDate)
+    const matchesEndDate = !endDate || expenseDate <= new Date(endDate)
+
+    return matchesSearch && matchesType && matchesTour && matchesLeader && matchesStartDate && matchesEndDate
   }) : []
 
   const getTypeText = (type) => {
@@ -229,9 +248,9 @@ export default function ExpensesPage() {
       <header className="bg-gradient-to-r from-green-100 via-green-50 to-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            <div className="flex items-center">
-              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16" />
-            </div>
+            <a href="/" className="flex items-center">
+              <img src="/logo.png" alt="Chân Trời Góc Bể Travel" className="h-16 cursor-pointer" />
+            </a>
             <div className="flex items-center space-x-4">
               <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
                 Hi, Thanh
@@ -259,29 +278,21 @@ export default function ExpensesPage() {
         </div>
       </header>
 
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            <Button variant="ghost" asChild>
-              <a href="/">
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Dashboard
-              </a>
-            </Button>
-            <Button variant="ghost" asChild>
-              <a href="/tours">
-                <MapPin className="w-4 h-4 mr-2" />
-                Quản lý Đơn hàng
-              </a>
-            </Button>
-            <Button variant="ghost" className="text-blue-600">
-              <DollarSign className="w-4 h-4 mr-2" />
-              Quản lý Chi phí
-            </Button>
-          </div>
-        </div>
-      </nav>
+      {/* Navigation + Filters */}
+      <NavBar
+        currentPage="expenses"
+        startDate={startDate}
+        endDate={endDate}
+        leaderName={leaderName}
+        onStartDateChange={setStartDate}
+        onEndDateChange={setEndDate}
+        onLeaderNameChange={setLeaderName}
+        onClearFilters={() => {
+          setStartDate('')
+          setEndDate('')
+          setLeaderName('')
+        }}
+      />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
