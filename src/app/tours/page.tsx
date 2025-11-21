@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Calendar, Users, Search, MapPin, DollarSign, Clock, TrendingUp, Plus } from 'lucide-react'
+import { Calendar, Users, Search, MapPin, DollarSign, Clock, TrendingUp, Plus, Pencil, Trash2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
+import { EditOrderDialog } from '@/components/ui/edit-order-dialog'
+import { MusicPlayer } from '@/components/providers/client-layout'
 
 export default function ToursPage() {
   const [tours, setTours] = useState([])
@@ -17,6 +19,8 @@ export default function ToursPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [selectedTour, setSelectedTour] = useState(null)
 
   useEffect(() => {
     fetchTours()
@@ -83,6 +87,33 @@ export default function ToursPage() {
     return 'default'
   }
 
+  const handleEdit = (tour) => {
+    setSelectedTour(tour)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleDelete = async (tourId) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa tour này? Tất cả booking và chi phí liên quan sẽ bị xóa.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/tours/${tourId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        alert('Xóa tour thành công!')
+        fetchTours()
+      } else {
+        alert('Lỗi khi xóa tour')
+      }
+    } catch (error) {
+      console.error('Error deleting tour:', error)
+      alert('Lỗi kết nối server')
+    }
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Đang tải...</div>
   }
@@ -98,7 +129,7 @@ export default function ToursPage() {
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
-                Xin chào, Thanh iu dấu
+                Hi, Thanh
               </div>
               <TooltipProvider>
                 <Tooltip>
@@ -116,6 +147,7 @@ export default function ToursPage() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              <MusicPlayer />
               <Button variant="outline">Đăng xuất</Button>
             </div>
           </div>
@@ -265,6 +297,28 @@ export default function ToursPage() {
                     </div>
                   </div>
 
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleEdit(tour)}
+                    >
+                      <Pencil className="w-4 h-4 mr-2" />
+                      Sửa
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleDelete(tour.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Xóa
+                    </Button>
+                  </div>
+
                 </div>
               </CardContent>
             </Card>
@@ -284,6 +338,16 @@ export default function ToursPage() {
         onOpenChange={setIsCreateOrderDialogOpen}
         onSuccess={fetchTours}
       />
+
+      {/* Edit Order Dialog */}
+      {selectedTour && (
+        <EditOrderDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          tourId={selectedTour.id}
+          onSuccess={fetchTours}
+        />
+      )}
     </div>
   )
 }

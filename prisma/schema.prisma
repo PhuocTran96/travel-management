@@ -64,6 +64,22 @@ model Booking {
 
   customer    Customer     @relation(fields: [customerId], references: [id])
   tour        Tour         @relation(fields: [tourId], references: [id])
+  guests      Guest[]
+}
+
+// Guest details for each booking
+model Guest {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId  String   @db.ObjectId
+  name       String
+  phone      String
+  serviceId  String?  // ID of service from TourInfo (optional for catalog services)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([name, phone])
 }
 
 // Chi phí

@@ -10,9 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, Search, DollarSign, TrendingDown, TrendingUp, Calendar, MapPin, Users } from 'lucide-react'
+import { Plus, Search, DollarSign, TrendingDown, TrendingUp, Calendar, MapPin, Users, Pencil, Trash2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
+import { EditExpenseDialog } from '@/components/ui/edit-expense-dialog'
+import { MusicPlayer } from '@/components/providers/client-layout'
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState([])
@@ -20,16 +22,26 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [selectedExpense, setSelectedExpense] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [tourFilter, setTourFilter] = useState('all')
 
-  const [newExpense, setNewExpense] = useState({
+  const [expenseList, setExpenseList] = useState([{
+    id: Date.now().toString(),
     tourId: '',
     type: 'TOUR_COST',
     amount: 0,
     description: ''
-  })
+  }])
+
+  // Format number with thousand separators
+  const formatNumber = (value: number | string): string => {
+    const num = typeof value === 'string' ? parseFloat(value.replace(/,/g, '')) : value
+    if (isNaN(num) || num === 0) return ''
+    return num.toLocaleString('vi-VN')
+  }
 
   useEffect(() => {
     fetchData()
@@ -67,29 +79,69 @@ export default function ExpensesPage() {
     }
   }
 
-  const handleCreateExpense = async () => {
+  const handleCreateExpenses = async () => {
     try {
-      const response = await fetch('/api/expenses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newExpense),
-      })
+      // Validate all expenses
+      const validExpenses = expenseList.filter(exp => exp.tourId && exp.amount > 0)
+      if (validExpenses.length === 0) {
+        alert('Vui lòng điền đầy đủ thông tin cho ít nhất 1 chi phí')
+        return
+      }
 
-      if (response.ok) {
+      // Create all expenses
+      const promises = validExpenses.map(expense =>
+        fetch('/api/expenses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(expense),
+        })
+      )
+
+      const results = await Promise.all(promises)
+      const allSuccess = results.every(res => res.ok)
+
+      if (allSuccess) {
+        alert(`Đã thêm thành công ${validExpenses.length} chi phí`)
         setIsCreateDialogOpen(false)
-        setNewExpense({
+        setExpenseList([{
+          id: Date.now().toString(),
           tourId: '',
           type: 'TOUR_COST',
           amount: 0,
           description: ''
-        })
+        }])
         fetchData()
+      } else {
+        alert('Có lỗi khi thêm một số chi phí')
       }
     } catch (error) {
-      console.error('Error creating expense:', error)
+      console.error('Error creating expenses:', error)
+      alert('Lỗi kết nối server')
     }
+  }
+
+  const addExpenseRow = () => {
+    setExpenseList([...expenseList, {
+      id: Date.now().toString(),
+      tourId: '',
+      type: 'TOUR_COST',
+      amount: 0,
+      description: ''
+    }])
+  }
+
+  const removeExpenseRow = (id: string) => {
+    if (expenseList.length > 1) {
+      setExpenseList(expenseList.filter(exp => exp.id !== id))
+    }
+  }
+
+  const updateExpense = (id: string, field: string, value: any) => {
+    setExpenseList(expenseList.map(exp =>
+      exp.id === id ? { ...exp, [field]: value } : exp
+    ))
   }
 
   const filteredExpenses = Array.isArray(expenses) ? expenses.filter(expense => {
@@ -117,6 +169,33 @@ export default function ExpensesPage() {
       case 'GUIDE': return 'outline'
       case 'STAFF': return 'destructive'
       default: return 'outline'
+    }
+  }
+
+  const handleEdit = (expense) => {
+    setSelectedExpense(expense)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleDelete = async (expenseId) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa chi phí này?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/expenses/${expenseId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        alert('Xóa chi phí thành công!')
+        fetchData()
+      } else {
+        alert('Lỗi khi xóa chi phí')
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error)
+      alert('Lỗi kết nối server')
     }
   }
 
@@ -155,7 +234,7 @@ export default function ExpensesPage() {
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 animate-pulse">
-                Xin chào, Thanh iu dấu
+                Hi, Thanh
               </div>
               <TooltipProvider>
                 <Tooltip>
@@ -173,6 +252,7 @@ export default function ExpensesPage() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              <MusicPlayer />
               <Button variant="outline">Đăng xuất</Button>
             </div>
           </div>
@@ -215,81 +295,124 @@ export default function ExpensesPage() {
                 Thêm Chi phí
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-[1100px]">
+            <DialogContent className="max-w-[1100px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Thêm Chi phí mới</DialogTitle>
                 <DialogDescription>
-                  Nhập thông tin chi phí cho tour
+                  Nhập thông tin chi phí cho tour. Có thể thêm nhiều chi phí cùng lúc.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="tour">Tour</Label>
-                    <Select value={newExpense.tourId} onValueChange={(value) => setNewExpense({...newExpense, tourId: value})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn tour" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tours.map((tour) => (
-                          <SelectItem key={tour.id} value={tour.id}>
-                            {tour.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              <div className="space-y-6">
+                {expenseList.map((expense, index) => (
+                  <div key={expense.id} className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-semibold">Chi phí #{index + 1}</h3>
+                      {expenseList.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeExpenseRow(expense.id)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          Xóa
+                        </Button>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor={`tour-${expense.id}`}>Tour</Label>
+                      <Select
+                        value={expense.tourId}
+                        onValueChange={(value) => updateExpense(expense.id, 'tourId', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Chọn tour" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tours.map((tour) => (
+                            <SelectItem key={tour.id} value={tour.id}>
+                              {tour.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor={`tourType-${expense.id}`}>Loại tour</Label>
+                      <Input
+                        value={tours.find(t => t.id === expense.tourId)?.type ?
+                          (tours.find(t => t.id === expense.tourId)?.type === 'GROUP' ? 'Tour ghép đoàn' :
+                           tours.find(t => t.id === expense.tourId)?.type === 'PRIVATE' ? 'Tour private' :
+                           tours.find(t => t.id === expense.tourId)?.type === 'ONE_ON_ONE' ? 'Tour 1-1' : '')
+                          : ''}
+                        disabled
+                        className="bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`type-${expense.id}`}>Loại chi phí</Label>
+                      <Select
+                        value={expense.type}
+                        onValueChange={(value) => updateExpense(expense.id, 'type', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TOUR_COST">Chi phí tour</SelectItem>
+                          <SelectItem value="PARTNER">Chi phí đối tác</SelectItem>
+                          <SelectItem value="GUIDE">Chi phí HDV</SelectItem>
+                          <SelectItem value="STAFF">Chi phí nhân viên</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor={`amount-${expense.id}`}>Số tiền (VNĐ)</Label>
+                      <Input
+                        type="text"
+                        value={formatNumber(expense.amount)}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '')
+                          updateExpense(expense.id, 'amount', value === '' ? 0 : parseInt(value))
+                        }}
+                        placeholder="Nhập số tiền..."
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`description-${expense.id}`}>Mô tả</Label>
+                      <Textarea
+                        value={expense.description}
+                        onChange={(e) => updateExpense(expense.id, 'description', e.target.value)}
+                        placeholder="Mô tả chi tiết về chi phí..."
+                        rows={2}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="tourType">Loại tour</Label>
-                    <Input
-                      value={tours.find(t => t.id === newExpense.tourId)?.type ?
-                        (tours.find(t => t.id === newExpense.tourId)?.type === 'GROUP' ? 'Tour ghép đoàn' :
-                         tours.find(t => t.id === newExpense.tourId)?.type === 'PRIVATE' ? 'Tour private' :
-                         tours.find(t => t.id === newExpense.tourId)?.type === 'ONE_ON_ONE' ? 'Tour 1-1' : '')
-                        : ''}
-                      disabled
-                      className="bg-gray-100"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="type">Loại chi phí</Label>
-                  <Select value={newExpense.type} onValueChange={(value) => setNewExpense({...newExpense, type: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="TOUR_COST">Chi phí tour</SelectItem>
-                      <SelectItem value="PARTNER">Chi phí đối tác</SelectItem>
-                      <SelectItem value="GUIDE">Chi phí HDV</SelectItem>
-                      <SelectItem value="STAFF">Chi phí nhân viên</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="amount">Số tiền (VNĐ)</Label>
-                  <Input
-                    type="number"
-                    value={newExpense.amount}
-                    onChange={(e) => setNewExpense({...newExpense, amount: parseFloat(e.target.value)})}
-                    placeholder="Nhập số tiền..."
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Mô tả</Label>
-                  <Textarea
-                    value={newExpense.description}
-                    onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
-                    placeholder="Mô tả chi tiết về chi phí..."
-                  />
-                </div>
+                ))}
+
+                <Button
+                  variant="outline"
+                  onClick={addExpenseRow}
+                  className="w-full"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Thêm chi phí khác
+                </Button>
               </div>
               <div className="flex justify-end space-x-2 mt-4">
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                <Button variant="outline" onClick={() => {
+                  setIsCreateDialogOpen(false)
+                  setExpenseList([{
+                    id: Date.now().toString(),
+                    tourId: '',
+                    type: 'TOUR_COST',
+                    amount: 0,
+                    description: ''
+                  }])
+                }}>
                   Hủy
                 </Button>
-                <Button onClick={handleCreateExpense}>
-                  Thêm Chi phí
+                <Button onClick={handleCreateExpenses}>
+                  Thêm {expenseList.length} Chi phí
                 </Button>
               </div>
             </DialogContent>
@@ -434,6 +557,28 @@ export default function ExpensesPage() {
                             <p className="text-sm text-gray-600">{expense.description}</p>
                           </div>
                         )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 mt-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleEdit(expense)}
+                          >
+                            <Pencil className="w-4 h-4 mr-2" />
+                            Sửa
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleDelete(expense.id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Xóa
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -509,6 +654,17 @@ export default function ExpensesPage() {
         onOpenChange={setIsCreateOrderDialogOpen}
         onSuccess={fetchData}
       />
+
+      {/* Edit Expense Dialog */}
+      {selectedExpense && (
+        <EditExpenseDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          expense={selectedExpense}
+          tours={tours}
+          onSuccess={fetchData}
+        />
+      )}
     </div>
   )
 }

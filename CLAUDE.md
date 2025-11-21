@@ -111,7 +111,7 @@ Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for 
 
 **Page Branding:**
 - All pages share consistent header with logo.png (h-16), gradient green background (from-green-100 via-green-50 to-white)
-- Header includes: "Xin chào, Thanh iu dấu" greeting (gradient pink-purple, animated pulse), circular "Tạo đơn hàng" button (Plus icon), "Đăng xuất" button
+- Header includes: "Hi, Thanh" greeting (gradient pink-purple, animated pulse), circular "Tạo đơn hàng" button (Plus icon), "Đăng xuất" button
 - Navigation bar with: Dashboard, Quản lý Đơn hàng, Quản lý Chi phí
 - Favicon: icon.png
 
@@ -282,6 +282,134 @@ Socket setup in [src/lib/socket.ts](src/lib/socket.ts) - currently implements ec
 - **Countries:** world-countries package
 - **Music Player:** Custom HTML5 Audio with React Context
 - **Deployment:** Railway.app
+
+## Dashboard System
+
+The dashboard ([src/app/page.tsx](src/app/page.tsx)) provides comprehensive analytics and tour management with real-time status updates.
+
+### Dashboard Features
+
+**Statistics Cards:**
+- Tổng Khách hàng - Unique guests count (calculated from Guest table by name+phone)
+- Tổng Đơn hàng - Total tours count
+- Lợi nhuận gộp - Gross profit (revenue - expenses)
+- Doanh thu - Total revenue from bookings
+
+**Filters:**
+- Date range filter (Từ ngày - Đến ngày)
+- Leader name autocomplete filter
+- Clear filters button
+
+### Dashboard Tabs
+
+**1. Tổng quan (Overview):**
+- Tình trạng Tour: Counts by status (UPCOMING, ONGOING, COMPLETED)
+- Phân tích Doanh thu: Revenue breakdown by tour type (GROUP, PRIVATE, ONE_ON_ONE)
+
+**2. Booking gần đây:**
+- Displays 5 most recent bookings
+- **Display Format:** "Tên trưởng nhóm - Tên Tour - Loại Tour"
+  - Tour types displayed as: "Tour ghép đoàn", "Tour private", "Tour 1-1"
+- **Payment Information (2 columns):**
+  - Chi phí sau chiết khấu (totalPrice)
+  - Khách đã thanh toán (deposit) - displayed in green
+- **Status Badge:**
+  - Auto-calculated: `paidAmount >= finalPrice ? 'Đã thanh toán đủ' : 'Chưa thanh toán đủ'`
+  - Legacy status mapping: CONFIRMED → "Đã thanh toán đủ", PENDING → "Chưa thanh toán đủ"
+  - Badge colors: "Đã thanh toán đủ" = default (blue), "Chưa thanh toán đủ" = secondary (gray)
+
+**3. Tour sắp diễn ra:**
+- Displays 5 upcoming tours (status: UPCOMING, startDate >= now)
+- Sorted by startDate ascending (earliest tour first)
+- **Countdown Display (GMT+7):**
+  - "Ngày mai" for 1 day
+  - "Còn X ngày" for X days
+  - Color coding:
+    - Red (≤ 3 days)
+    - Orange (4-7 days)
+    - Blue (> 7 days)
+
+**4. Tour đang diễn ra:**
+- Displays 5 ongoing tours (status: ONGOING)
+- Sorted by endDate ascending (ending soonest first)
+- **Countdown to End Date (GMT+7):**
+  - Same format as "Tour sắp diễn ra"
+  - Counts down days until tour completion
+
+**5. Tour đã hoàn thành:**
+- Displays 5 completed tours (status: COMPLETED)
+- Sorted by endDate descending (most recently completed first)
+- **Payment Status Display:**
+  - If `remainingAmount > 0`: Red text "Thiếu Xđ"
+  - If `remainingAmount <= 0`: Green text "Đã thanh toán đủ"
+  - Shows payment ratio: `totalDeposit / totalPrice`
+- **Payment Calculation:**
+  - `totalPrice` = sum of all booking.totalPrice for the tour
+  - `totalDeposit` = sum of all booking.deposit for the tour
+  - `remainingAmount` = totalPrice - totalDeposit
+
+### API Endpoint
+
+**GET `/api/dashboard`** returns:
+```typescript
+{
+  stats: {
+    totalCustomers: number
+    totalOrders: number
+    grossProfit: number
+    totalRevenue: number
+    totalExpenses: number
+  },
+  recentBookings: Array<{
+    id: string
+    customerName: string
+    tourName: string
+    tourType: 'GROUP' | 'PRIVATE' | 'ONE_ON_ONE'
+    totalPrice: number
+    deposit: number
+    status: string
+  }>,
+  upcomingTours: Array<{
+    id: string
+    name: string
+    startDate: string (ISO)
+    endDate: string (ISO)
+    maxGuests: number
+    bookedGuests: number
+    price: number
+    type: string
+  }>,
+  ongoingTours: Array<{...}>, // Same structure as upcomingTours
+  completedTours: Array<{
+    id: string
+    name: string
+    startDate: string (ISO)
+    endDate: string (ISO)
+    maxGuests: number
+    bookedGuests: number
+    totalPrice: number
+    totalDeposit: number
+    remainingAmount: number
+  }>,
+  tourStatus: { upcoming: number, ongoing: number, completed: number },
+  revenueByType: { group: number, private: number, oneOnOne: number }
+}
+```
+
+**Query Parameters:**
+- `startDate` - Filter tours by end date >= startDate
+- `endDate` - Filter tours by end date <= endDate
+- `leaderName` - Filter by customer name (case-insensitive contains)
+
+### Date Calculations (GMT+7)
+
+All countdown calculations use GMT+7 timezone:
+```typescript
+const gmtPlus7Offset = 7 * 60 // minutes
+const localOffset = now.getTimezoneOffset()
+const offsetDiff = gmtPlus7Offset + localOffset
+const nowGMT7 = new Date(now.getTime() + offsetDiff * 60 * 1000)
+```
 
 ## Music Player System
 

@@ -23,7 +23,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
-    
+
     const booking = await db.booking.create({
       data: {
         customerId: data.customerId,
@@ -31,11 +31,19 @@ export async function POST(request: NextRequest) {
         deposit: data.deposit,
         totalPrice: data.totalPrice,
         status: data.status || 'PENDING',
-        notes: data.notes
+        notes: data.notes,
+        guests: data.guests ? {
+          create: data.guests.map((guest: { name: string; phone: string; serviceId?: string }) => ({
+            name: guest.name,
+            phone: guest.phone,
+            serviceId: guest.serviceId
+          }))
+        } : undefined
       },
       include: {
         customer: true,
-        tour: true
+        tour: true,
+        guests: true
       }
     })
 

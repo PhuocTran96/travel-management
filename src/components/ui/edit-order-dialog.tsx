@@ -23,13 +23,14 @@ interface TourInfo {
   ghiChu: string | null
 }
 
-interface CreateOrderDialogProps {
+interface EditOrderDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  tourId: string
   onSuccess?: () => void
 }
 
-export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrderDialogProps) {
+export function EditOrderDialog({ open, onOpenChange, tourId, onSuccess }: EditOrderDialogProps) {
   const [currentStep, setCurrentStep] = useState<'customer' | 'tour' | 'review'>('customer')
   const [loading, setLoading] = useState(false)
   const [countryOpen, setCountryOpen] = useState(false)
@@ -57,6 +58,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
   // Customer data
   const [customerData, setCustomerData] = useState({
+    id: '',
     name: '',
     email: '',
     phone: '',
@@ -80,7 +82,8 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     status: 'UPCOMING'
   })
 
-  const [createdCustomerId, setCreatedCustomerId] = useState<string | null>(null)
+  const [bookingId, setBookingId] = useState<string | null>(null)
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false)
 
   // Fetch tour info on mount
   useEffect(() => {
@@ -102,6 +105,128 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     }
     fetchTourInfo()
   }, [])
+
+  // Load existing tour data when dialog opens
+  useEffect(() => {
+    if (open && tourId && !initialDataLoaded) {
+      loadTourData()
+    }
+  }, [open, tourId])
+
+  const loadTourData = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/tours/${tourId}`)
+      const tour = await response.json()
+
+      if (response.ok) {
+        // Set tour data
+        setTourData({
+          name: tour.name || '',
+          description: tour.description || '',
+          type: tour.type || 'GROUP',
+          maxGuests: tour.maxGuests || 10,
+          price: tour.price || 0,
+          startDate: tour.startDate ? new Date(tour.startDate).toISOString().split('T')[0] : '',
+          endDate: tour.endDate ? new Date(tour.endDate).toISOString().split('T')[0] : '',
+          status: tour.status || 'UPCOMING'
+        })
+
+        // Extract tour name and services from full name
+        // Format: "Tour Name - Service1 (x2), Service2 (x1), Custom Service (x3)"
+        if (tour.name) {
+          const match = tour.name.match(/^(.+?)\s*-\s*(.+)$/)
+          if (match) {
+            const tourName = match[1].trim()
+            const servicesStr = match[2].trim()
+
+            setSelectedTourName(tourName)
+
+            // Parse services and quantities
+            const serviceMatches = servicesStr.matchAll(/([^,]+?)\s*\(x(\d+)\)/g)
+            const parsedQuantities: Record<string, number> = {}
+            const parsedCustomServices: Array<{ id: string; name: string; price: number; quantity: number }> = []
+
+            for (const serviceMatch of serviceMatches) {
+              const serviceName = serviceMatch[1].trim()
+              const quantity = parseInt(serviceMatch[2])
+
+              // Check if this is a custom service (dịch vụ bổ sung)
+              // Custom services are those not in the tour catalog
+              const catalogService = tourInfoList.find(t => t.dichVu === serviceName)
+
+              if (catalogService) {
+                // This is a catalog service
+                parsedQuantities[catalogService.id] = quantity
+              } else {
+                // This is a custom service
+                parsedCustomServices.push({
+                  id: `custom-${Date.now()}-${Math.random()}`,
+                  name: serviceName,
+                  price: 0, // We don't have the original price, will need to recalculate
+                  quantity: quantity
+                })
+              }
+            }
+
+            setServiceQuantities(parsedQuantities)
+            setCustomServices(parsedCustomServices)
+          }
+        }
+
+        // Load booking data
+        if (tour.bookings && tour.bookings.length > 0) {
+          const booking = tour.bookings[0]
+          setBookingId(booking.id)
+          setPaidAmount(booking.deposit || 0)
+
+          // Load customer data
+          if (booking.customer) {
+            setCustomerData({
+              id: booking.customer.id,
+              name: booking.customer.name || '',
+              email: booking.customer.email || '',
+              phone: booking.customer.phone || '',
+              source: booking.customer.source || 'Website',
+              address: booking.customer.address || '',
+              gender: booking.customer.gender || 'MALE',
+              title: booking.customer.title || '',
+              country: booking.customer.country || 'Vietnam',
+              dateOfBirth: booking.customer.dateOfBirth ? new Date(booking.customer.dateOfBirth) : undefined
+            })
+          }
+
+          // Load guest details
+          if (booking.guests && booking.guests.length > 0) {
+            const guestsByService: Record<string, Array<{ name: string; phone: string }>> = {}
+            booking.guests.slice(1).forEach((guest: any) => {
+              const serviceId = guest.serviceId || 'default'
+              if (!guestsByService[serviceId]) {
+                guestsByService[serviceId] = []
+              }
+              guestsByService[serviceId].push({
+                name: guest.name || '',
+                phone: guest.phone || ''
+              })
+            })
+            setGuestDetails(guestsByService)
+          }
+
+          // Calculate discount from booking
+          if (tour.price > 0) {
+            const discountPercent = ((tour.price - booking.totalPrice) / tour.price) * 100
+            setDiscount(Math.round(discountPercent * 100) / 100)
+          }
+        }
+
+        setInitialDataLoaded(true)
+      }
+    } catch (error) {
+      console.error('Error loading tour data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Get unique tour names - ensure tourInfoList is array
   const uniqueTourNames = Array.isArray(tourInfoList)
@@ -246,7 +371,9 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
   const resetForm = () => {
     setCurrentStep('customer')
+    setInitialDataLoaded(false)
     setCustomerData({
+      id: '',
       name: '',
       email: '',
       phone: '',
@@ -266,7 +393,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     setPaidAmount(0)
     setGuestDetails({})
     setShowGuestDetailsDialog(false)
-    setCreatedCustomerId(null)
+    setBookingId(null)
   }
 
   const handleNextStep = () => {
@@ -292,7 +419,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     setCurrentStep('review')
   }
 
-  const handleCreateOrder = async () => {
+  const handleUpdateOrder = async () => {
     // Validate có ít nhất 1 dịch vụ được chọn (catalog hoặc custom)
     if (Object.keys(serviceQuantities).length === 0 && customServices.filter(s => s.quantity > 0).length === 0) {
       alert('Vui lòng chọn ít nhất 1 dịch vụ')
@@ -301,25 +428,15 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
 
     setLoading(true)
     try {
-      // Step 1: Create customer
-      const customerResponse = await fetch('/api/customers', {
-        method: 'POST',
+      // Step 1: Update customer
+      await fetch(`/api/customers/${customerData.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...customerData,
           dateOfBirth: customerData.dateOfBirth?.toISOString()
         })
       })
-
-      const customerResult = await customerResponse.json()
-
-      if (!customerResponse.ok) {
-        alert('Lỗi tạo khách hàng: ' + (customerResult.error || 'Unknown error'))
-        setLoading(false)
-        return
-      }
-
-      const customerId = customerResult.id
 
       // Build tour name with selected services (catalog + custom)
       const catalogServices = Object.keys(serviceQuantities).map(serviceId => {
@@ -334,27 +451,23 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
       const allServices = [...catalogServices, ...customServiceNames].join(', ')
       const tourName = selectedTourName ? `${selectedTourName} - ${allServices}` : allServices
 
-      // Step 2: Create tour
-      const tourResponse = await fetch('/api/tours', {
-        method: 'POST',
+      // Step 2: Update tour
+      await fetch(`/api/tours/${tourId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...tourData,
           name: tourName,
+          description: tourData.description,
+          type: tourData.type,
+          startDate: tourData.startDate,
+          endDate: tourData.endDate,
           price: parseFloat(tourData.price.toString()),
-          maxGuests: parseInt(tourData.maxGuests.toString())
+          maxGuests: parseInt(tourData.maxGuests.toString()),
+          status: tourData.status
         })
       })
 
-      const tourResult = await tourResponse.json()
-
-      if (!tourResponse.ok) {
-        alert('Lỗi tạo tour: ' + (tourResult.error || 'Unknown error'))
-        setLoading(false)
-        return
-      }
-
-      // Step 3: Create booking with guest details
+      // Step 3: Update booking with guest details
       const finalPrice = calculateDiscountedPrice()
 
       // Prepare guest list: leader + all guest details
@@ -376,32 +489,26 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
         })
       })
 
-      const bookingResponse = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customerId,
-          tourId: tourResult.id,
-          deposit: paidAmount,
-          totalPrice: finalPrice,
-          status: paidAmount >= finalPrice ? 'Đã thanh toán đủ' : 'Chưa thanh toán đủ',
-          notes: tourData.description || '',
-          guests: guestList
+      if (bookingId) {
+        await fetch(`/api/bookings/${bookingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deposit: paidAmount,
+            totalPrice: finalPrice,
+            status: paidAmount >= finalPrice ? 'Đã thanh toán đủ' : 'Chưa thanh toán đủ',
+            notes: tourData.description || '',
+            guests: guestList
+          })
         })
-      })
-
-      const bookingResult = await bookingResponse.json()
-
-      if (bookingResponse.ok) {
-        alert('Tạo đơn hàng thành công!')
-        resetForm()
-        onOpenChange(false)
-        if (onSuccess) onSuccess()
-      } else {
-        alert('Lỗi tạo booking: ' + (bookingResult.error || 'Unknown error'))
       }
+
+      alert('Cập nhật đơn hàng thành công!')
+      resetForm()
+      onOpenChange(false)
+      if (onSuccess) onSuccess()
     } catch (error) {
-      console.error('Error creating order:', error)
+      console.error('Error updating order:', error)
       alert('Lỗi kết nối server')
     } finally {
       setLoading(false)
@@ -416,9 +523,9 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     }}>
       <DialogContent className="w-[98vw] sm:w-[90vw] max-w-[1100px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tạo Đơn Hàng Mới</DialogTitle>
+          <DialogTitle>Chỉnh Sửa Đơn Hàng</DialogTitle>
           <DialogDescription>
-            Tạo khách hàng, tour và booking trong một quy trình
+            Cập nhật thông tin khách hàng, tour và booking
           </DialogDescription>
         </DialogHeader>
 
@@ -1130,10 +1237,10 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                 ← Quay lại
               </Button>
               <Button
-                onClick={handleCreateOrder}
+                onClick={handleUpdateOrder}
                 disabled={loading}
               >
-                {loading ? 'Đang tạo...' : 'Hoàn thành'}
+                {loading ? 'Đang lưu...' : 'Lưu thay đổi'}
               </Button>
             </div>
           </TabsContent>
