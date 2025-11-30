@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Search, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Search, Plus, Pencil, Trash2, Download } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CreateOrderDialog } from '@/components/ui/create-order-dialog'
 import { EditOrderDialog } from '@/components/ui/edit-order-dialog'
@@ -23,9 +24,32 @@ export default function ToursPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [selectedTour, setSelectedTour] = useState(null)
 
+  // Calculate default date range (first day of current month to today in GMT+7)
+  const getDefaultDateRange = () => {
+    const now = new Date()
+    const gmtPlus7Offset = 7 * 60 // GMT+7 in minutes
+    const localOffset = now.getTimezoneOffset()
+    const offsetDiff = gmtPlus7Offset + localOffset
+    const nowGMT7 = new Date(now.getTime() + offsetDiff * 60 * 1000)
+
+    // Get current year and month in GMT+7
+    const year = nowGMT7.getUTCFullYear()
+    const month = nowGMT7.getUTCMonth()
+    const day = nowGMT7.getUTCDate()
+
+    // First day of current month in GMT+7 (YYYY-MM-01)
+    const firstDayStr = `${year}-${String(month + 1).padStart(2, '0')}-01`
+
+    // Today in GMT+7 (YYYY-MM-DD)
+    const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+    return { firstDay: firstDayStr, today: todayStr }
+  }
+
   // Filter states for NavBar
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const defaultDates = getDefaultDateRange()
+  const [startDate, setStartDate] = useState(defaultDates.firstDay)
+  const [endDate, setEndDate] = useState(defaultDates.today)
   const [leaderName, setLeaderName] = useState('')
 
   useEffect(() => {
@@ -149,6 +173,42 @@ export default function ToursPage() {
     }
   }
 
+  const handleExportExcel = () => {
+    // Create CSV content
+    const headers = ['Tên Tour', 'Loại Tour', 'Trưởng nhóm', 'SĐT', 'Start Date', 'End Date', 'Status', 'Thanh toán']
+    const rows = filteredTours.map(tour => {
+      const leader = getLeaderInfo(tour)
+      const payment = getPaymentStatus(tour)
+      return [
+        tour.name,
+        getTypeText(tour.type),
+        leader.name,
+        leader.phone,
+        formatDate(tour.startDate),
+        formatDate(tour.endDate),
+        getStatusText(tour.status),
+        payment.text
+      ]
+    })
+
+    // Convert to CSV
+    const csvContent = [
+      '\uFEFF' + headers.join(','), // BOM for UTF-8
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n')
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `danh-sach-don-hang-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Đang tải...</div>
   }
@@ -205,8 +265,60 @@ export default function ToursPage() {
         }}
       />
 
-      {/* Filters */}
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Status Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setStatusFilter('UPCOMING')}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Sắp diễn ra</p>
+                  <p className="text-2xl font-bold mt-1">
+                    {filteredTours.filter(t => t.status === 'UPCOMING').length}
+                  </p>
+                </div>
+                <div className="bg-blue-100 text-blue-600 rounded-full w-10 h-10 flex items-center justify-center font-semibold">
+                  {filteredTours.filter(t => t.status === 'UPCOMING').length}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setStatusFilter('ONGOING')}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Đang diễn ra</p>
+                  <p className="text-2xl font-bold mt-1">
+                    {filteredTours.filter(t => t.status === 'ONGOING').length}
+                  </p>
+                </div>
+                <div className="bg-green-100 text-green-600 rounded-full w-10 h-10 flex items-center justify-center font-semibold">
+                  {filteredTours.filter(t => t.status === 'ONGOING').length}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setStatusFilter('COMPLETED')}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Đã hoàn thành</p>
+                  <p className="text-2xl font-bold mt-1">
+                    {filteredTours.filter(t => t.status === 'COMPLETED').length}
+                  </p>
+                </div>
+                <div className="bg-gray-100 text-gray-600 rounded-full w-10 h-10 flex items-center justify-center font-semibold">
+                  {filteredTours.filter(t => t.status === 'COMPLETED').length}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="flex-1">
             <div className="relative">
@@ -241,6 +353,14 @@ export default function ToursPage() {
               <SelectItem value="ONE_ON_ONE">Tour 1-1</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            className="w-48"
+            onClick={handleExportExcel}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Xuất Excel
+          </Button>
         </div>
 
         {/* Tours Table */}

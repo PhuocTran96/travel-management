@@ -25,24 +25,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // Get unique guest count from Guest table
-    const allGuests = await db.guest.findMany({
-      select: {
-        name: true,
-        phone: true
-      }
-    })
-
-    // Count unique guests by name+phone combination
-    const uniqueGuestsSet = new Set<string>()
-    allGuests.forEach(guest => {
-      const key = `${guest.name.toLowerCase().trim()}|${guest.phone.trim()}`
-      uniqueGuestsSet.add(key)
-    })
-    const totalCustomers = uniqueGuestsSet.size
-
-    const totalOrders = await db.tour.count(dateFilter.endDate ? { where: dateFilter } : {})
-
     // Get bookings with date and leader name filter
     const bookingWhere: any = {}
     if (dateFilter.endDate) {
@@ -60,10 +42,25 @@ export async function GET(request: Request) {
     const bookings = await db.booking.findMany({
       include: {
         tour: true,
-        customer: true
+        customer: true,
+        guests: true
       },
       where: Object.keys(bookingWhere).length > 0 ? bookingWhere : {}
     })
+
+    // Get unique guest count from filtered bookings
+    const uniqueGuestsSet = new Set<string>()
+    bookings.forEach(booking => {
+      booking.guests?.forEach(guest => {
+        const key = `${guest.name.toLowerCase().trim()}|${guest.phone.trim()}`
+        uniqueGuestsSet.add(key)
+      })
+    })
+    const totalCustomers = uniqueGuestsSet.size
+
+    // Count total orders from filtered bookings (unique tours)
+    const uniqueTourIds = new Set(bookings.map(b => b.tourId))
+    const totalOrders = uniqueTourIds.size
 
     // Calculate total revenue
     const totalRevenue = bookings.reduce((sum, booking) => sum + booking.totalPrice, 0)

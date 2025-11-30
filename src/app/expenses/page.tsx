@@ -29,9 +29,32 @@ export default function ExpensesPage() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [tourFilter, setTourFilter] = useState('all')
 
+  // Calculate default date range (first day of current month to today in GMT+7)
+  const getDefaultDateRange = () => {
+    const now = new Date()
+    const gmtPlus7Offset = 7 * 60 // GMT+7 in minutes
+    const localOffset = now.getTimezoneOffset()
+    const offsetDiff = gmtPlus7Offset + localOffset
+    const nowGMT7 = new Date(now.getTime() + offsetDiff * 60 * 1000)
+
+    // Get current year and month in GMT+7
+    const year = nowGMT7.getUTCFullYear()
+    const month = nowGMT7.getUTCMonth()
+    const day = nowGMT7.getUTCDate()
+
+    // First day of current month in GMT+7 (YYYY-MM-01)
+    const firstDayStr = `${year}-${String(month + 1).padStart(2, '0')}-01`
+
+    // Today in GMT+7 (YYYY-MM-DD)
+    const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+    return { firstDay: firstDayStr, today: todayStr }
+  }
+
   // Filter states for NavBar
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const defaultDates = getDefaultDateRange()
+  const [startDate, setStartDate] = useState(defaultDates.firstDay)
+  const [endDate, setEndDate] = useState(defaultDates.today)
   const [leaderName, setLeaderName] = useState('')
 
   const [expenseList, setExpenseList] = useState([{

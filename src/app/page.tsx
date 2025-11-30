@@ -61,8 +61,32 @@ export default function Home() {
   const [revenueByType, setRevenueByType] = useState({ group: 0, private: 0, oneOnOne: 0 })
   const [loading, setLoading] = useState(true)
   const [isCreateOrderDialogOpen, setIsCreateOrderDialogOpen] = useState(false)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+
+  // Calculate default date range (first day of current month to today in GMT+7)
+  const getDefaultDateRange = () => {
+    const now = new Date()
+    const gmtPlus7Offset = 7 * 60 // GMT+7 in minutes
+    const localOffset = now.getTimezoneOffset()
+    const offsetDiff = gmtPlus7Offset + localOffset
+    const nowGMT7 = new Date(now.getTime() + offsetDiff * 60 * 1000)
+
+    // Get current year and month in GMT+7
+    const year = nowGMT7.getUTCFullYear()
+    const month = nowGMT7.getUTCMonth()
+    const day = nowGMT7.getUTCDate()
+
+    // First day of current month in GMT+7 (YYYY-MM-01)
+    const firstDayStr = `${year}-${String(month + 1).padStart(2, '0')}-01`
+
+    // Today in GMT+7 (YYYY-MM-DD)
+    const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+    return { firstDay: firstDayStr, today: todayStr }
+  }
+
+  const defaultDates = getDefaultDateRange()
+  const [startDate, setStartDate] = useState(defaultDates.firstDay)
+  const [endDate, setEndDate] = useState(defaultDates.today)
   const [leaderName, setLeaderName] = useState('')
 
   // Helper function to normalize status
@@ -258,7 +282,7 @@ export default function Home() {
         <Tabs defaultValue="overview" className="space-y-4">
           <TabsList>
             <TabsTrigger value="overview">Tổng quan</TabsTrigger>
-            <TabsTrigger value="bookings">Booking gần đây</TabsTrigger>
+            <TabsTrigger value="bookings">Đơn hàng gần đây</TabsTrigger>
             <TabsTrigger value="tours">Tour sắp diễn ra</TabsTrigger>
             <TabsTrigger value="ongoing">Tour đang diễn ra</TabsTrigger>
             <TabsTrigger value="completed">Tour đã hoàn thành</TabsTrigger>
@@ -315,7 +339,7 @@ export default function Home() {
           <TabsContent value="bookings">
             <Card>
               <CardHeader>
-                <CardTitle>Booking gần đây</CardTitle>
+                <CardTitle>Đơn hàng gần đây</CardTitle>
                 <CardDescription>Các booking được tạo gần đây</CardDescription>
               </CardHeader>
               <CardContent>

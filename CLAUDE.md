@@ -115,6 +115,13 @@ Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for 
 
 The order management page ([src/app/tours/page.tsx](src/app/tours/page.tsx)) displays all tours in a table layout:
 
+### Status Cards
+Three clickable cards at the top of the page:
+- **Sắp diễn ra** (Upcoming) - Blue badge, shows count of upcoming tours, click to filter
+- **Đang diễn ra** (Ongoing) - Green badge, shows count of ongoing tours, click to filter
+- **Đã hoàn thành** (Completed) - Gray badge, shows count of completed tours, click to filter
+- Each card has large count on left and notification badge (rounded circle) on right
+
 ### Table Columns
 | Column | Description |
 |--------|-------------|
@@ -141,7 +148,8 @@ const remaining = totalPrice - totalDeposit
 - Search by tour name
 - Filter by status (Tất cả / Sắp diễn ra / Đang diễn ra / Hoàn thành)
 - Filter by tour type (Tất cả / Tour ghép đoàn / Tour private / Tour 1-1)
-- NavBar filters: Date range, Leader name
+- NavBar filters: Date range (defaults to first day of current month to today GMT+7), Leader name
+- **Export Excel button**: Downloads filtered data as CSV file with UTF-8 BOM encoding
 
 **Page Branding:**
 - All pages share consistent header with logo.png (h-16), gradient green background (from-green-100 via-green-50 to-white)
@@ -384,7 +392,7 @@ The dashboard ([src/app/page.tsx](src/app/page.tsx)) provides comprehensive anal
 - Tình trạng Tour: Counts by status (UPCOMING, ONGOING, COMPLETED)
 - Phân tích Doanh thu: Revenue breakdown by tour type (GROUP, PRIVATE, ONE_ON_ONE)
 
-**2. Booking gần đây:**
+**2. Đơn hàng gần đây:**
 - Displays 5 most recent bookings
 - **Display Format:** "Tên trưởng nhóm - Tên Tour - Loại Tour"
   - Tour types displayed as: "Tour ghép đoàn", "Tour private", "Tour 1-1"

@@ -9,7 +9,11 @@ export async function GET() {
 
     const tours = await db.tour.findMany({
       include: {
-        bookings: true,
+        bookings: {
+          include: {
+            customer: true
+          }
+        },
         expenses: true
       },
       orderBy: {
