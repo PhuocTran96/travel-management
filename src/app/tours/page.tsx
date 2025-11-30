@@ -24,7 +24,7 @@ export default function ToursPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [selectedTour, setSelectedTour] = useState(null)
 
-  // Calculate default date range (first day of current month to today in GMT+7)
+  // Calculate default date range (first day of current month to last day of current month in GMT+7)
   const getDefaultDateRange = () => {
     const now = new Date()
     const gmtPlus7Offset = 7 * 60 // GMT+7 in minutes
@@ -35,21 +35,21 @@ export default function ToursPage() {
     // Get current year and month in GMT+7
     const year = nowGMT7.getUTCFullYear()
     const month = nowGMT7.getUTCMonth()
-    const day = nowGMT7.getUTCDate()
 
     // First day of current month in GMT+7 (YYYY-MM-01)
     const firstDayStr = `${year}-${String(month + 1).padStart(2, '0')}-01`
 
-    // Today in GMT+7 (YYYY-MM-DD)
-    const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    // Last day of current month in GMT+7 (YYYY-MM-DD)
+    const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0)) // 0th day of next month = last day of current month
+    const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayOfMonth.getUTCDate()).padStart(2, '0')}`
 
-    return { firstDay: firstDayStr, today: todayStr }
+    return { firstDay: firstDayStr, lastDay: lastDayStr }
   }
 
   // Filter states for NavBar
   const defaultDates = getDefaultDateRange()
   const [startDate, setStartDate] = useState(defaultDates.firstDay)
-  const [endDate, setEndDate] = useState(defaultDates.today)
+  const [endDate, setEndDate] = useState(defaultDates.lastDay)
   const [leaderName, setLeaderName] = useState('')
 
   useEffect(() => {
