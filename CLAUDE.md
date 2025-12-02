@@ -15,6 +15,7 @@ This is a **Travel Management System** (Hệ thống Quản lý Du lịch) built
 - Multi-step order creation workflow
 - Real-time WebSocket communication via Socket.IO
 - Dashboard with statistics and analytics
+- **Calendar view** with visual tour scheduling and quick creation
 
 ## Development Commands
 
@@ -89,6 +90,7 @@ All API routes follow Next.js App Router conventions in `src/app/api/`:
 - `/api/expenses` - Expense tracking
 - `/api/tour-info` - Tour catalog data for order creation
 - `/api/dashboard` - Aggregated statistics
+- `/api/calendar` - Calendar view data (tours by month/year)
 
 Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for data access.
 
@@ -110,8 +112,95 @@ Each route exports `GET`, `POST`, `PUT`, `DELETE` as needed and uses Prisma for 
 - `/` - Dashboard with statistics and overview
 - `/tours` - Order management (Quản lý Đơn hàng) - displays all tours/bookings in **table format**
 - `/expenses` - Expense tracking
+- `/calendar` - **Calendar view** with Google Calendar-like interface for tour visualization and creation
+
+## Calendar System
+
+The calendar page ([src/app/calendar/page.tsx](src/app/calendar/page.tsx)) provides a visual month view of all tours with quick tour creation capability.
+
+### Calendar Features
+
+**Month View Display:**
+- Google Calendar-like grid layout with 7 columns (Sunday to Saturday)
+- Vietnamese day headers: CN, T2, T3, T4, T5, T6, T7
+- Month/year display with navigation arrows
+- "Hôm nay" (Today) button to jump to current month
+- Today's date highlighted with blue background and ring
+
+**Tour Visualization:**
+- Tours displayed on their respective dates spanning from start to end date
+- **Color coding by tour type:**
+  - 🟢 **Green** - GROUP tours (Tour ghép đoàn)
+  - 🔵 **Blue** - PRIVATE tours (Tour private)
+  - 🟣 **Pink** - ONE_ON_ONE tours (Tour 1-1)
+- Rocket emoji (🚀) marks tour start dates
+- Up to 3 tours shown per day, with "+X tour khác" for overflow
+- Hover tooltip shows tour details (name, type, guest count)
+
+**Interactive Tour Creation:**
+- **Click on any calendar date** → Opens CreateOrderDialog with pre-filled start/end dates
+- **Header Plus button** → Opens CreateOrderDialog without pre-filled dates
+- Event bubbling prevented on tour clicks (clicking tours shows details, not create dialog)
+- Calendar auto-refreshes after successful tour creation
+
+**Tour Details Panel:**
+- Click on tour event to view details in expandable panel
+- Shows: tour name, type badge, dates, guest count, price, status
+- Close button to dismiss details
+
+### Navigation Integration
+- **Calendar button** in NavBar (CalendarDays icon) next to hamburger menu
+- Matches header design across all pages (consistent with dashboard)
+- Direct navigation to `/calendar` route
+
+### API Endpoint
+
+**GET `/api/calendar`** with query parameters:
+- `month` (required) - Month number (1-12)
+- `year` (required) - Year (e.g., 2025)
+
+Returns array of tours:
+```typescript
+Array<{
+  id: string
+  name: string
+  type: 'GROUP' | 'PRIVATE' | 'ONE_ON_ONE'
+  status: 'UPCOMING' | 'ONGOING' | 'COMPLETED'
+  startDate: string (ISO)
+  endDate: string (ISO)
+  maxGuests: number
+  bookedGuests: number (from bookings count)
+  price: number
+}>
+```
+
+### CreateOrderDialog Integration
+
+The CreateOrderDialog component ([src/components/ui/create-order-dialog.tsx](src/components/ui/create-order-dialog.tsx)) supports optional date pre-filling:
+
+**Props:**
+- `initialStartDate?: string` - Pre-fill start date (YYYY-MM-DD format)
+- `initialEndDate?: string` - Pre-fill end date (YYYY-MM-DD format)
+
+**Behavior:**
+- When opened from calendar date click, dates are pre-filled based on clicked date
+- When opened from header button, dates remain empty for manual entry
+- useEffect Hook updates tour dates when dialog reopens with new initial dates
+
+**Example Usage:**
+```typescript
+<CreateOrderDialog
+  open={isCreateOrderDialogOpen}
+  onOpenChange={setIsCreateOrderDialogOpen}
+  onSuccess={handleCreateTourSuccess}
+  initialStartDate="2025-12-15"
+  initialEndDate="2025-12-15"
+/>
+```
+
 
 ## Order Management Page (`/tours`)
+> **Note:** For a visual schedule view of tours, see the **[Calendar System](#calendar-system)** (`/calendar`).
 
 The order management page ([src/app/tours/page.tsx](src/app/tours/page.tsx)) displays all tours in a table layout:
 
@@ -160,6 +249,7 @@ const remaining = totalPrice - totalDeposit
 
 **Navigation (NavBar):**
 - Hamburger menu (☰) with dropdown containing: Dashboard, Quản lý Đơn hàng, Quản lý Chi phí
+- **Calendar button** (📅) next to hamburger menu - navigates to `/calendar` page
 - Integrated filters in nav bar: Date range (Từ ngày, Đến ngày), Leader name search with autocomplete, Clear filters button
 - Search input uses magnify icon instead of label
 
@@ -220,6 +310,7 @@ The [src/components/ui/create-order-dialog.tsx](src/components/ui/create-order-d
 4. **Service quantity selection**: Show all services with +/- buttons and manual input for quantity
 5. **Automatic calculations**: Total price, total guests, discount, remaining balance
 6. **Simplified date picker**: 3 separate dropdowns (day/month/year) instead of full calendar
+7. **Date Pre-filling**: Accepts `initialStartDate` and `initialEndDate` props to pre-populate tour dates (used by Calendar)
 
 ### Step 1: Customer Info
 - Basic: Name, Email, Phone, Source, Address

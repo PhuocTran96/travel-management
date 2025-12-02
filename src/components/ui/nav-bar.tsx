@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Menu, Search, TrendingUp, MapPin, DollarSign } from 'lucide-react'
+import { Menu, Search, TrendingUp, MapPin, DollarSign, CalendarDays } from 'lucide-react'
 
 interface NavBarProps {
   currentPage: 'dashboard' | 'tours' | 'expenses'
@@ -60,34 +60,46 @@ export function NavBar({
     <nav className="bg-white shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
-          {/* Hamburger Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem asChild>
-                <a href="/" className={`flex items-center cursor-pointer ${currentPage === 'dashboard' ? 'text-blue-600 font-medium' : ''}`}>
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  Dashboard
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="/tours" className={`flex items-center cursor-pointer ${currentPage === 'tours' ? 'text-blue-600 font-medium' : ''}`}>
-                  <MapPin className="w-4 h-4 mr-2" />
-                  Quản lý Đơn hàng
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="/expenses" className={`flex items-center cursor-pointer ${currentPage === 'expenses' ? 'text-blue-600 font-medium' : ''}`}>
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  Quản lý Chi phí
-                </a>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Hamburger Menu + Calendar Button */}
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem asChild>
+                  <a href="/" className={`flex items-center cursor-pointer ${currentPage === 'dashboard' ? 'text-blue-600 font-medium' : ''}`}>
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Dashboard
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/tours" className={`flex items-center cursor-pointer ${currentPage === 'tours' ? 'text-blue-600 font-medium' : ''}`}>
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Quản lý Đơn hàng
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/expenses" className={`flex items-center cursor-pointer ${currentPage === 'expenses' ? 'text-blue-600 font-medium' : ''}`}>
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Quản lý Chi phí
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Calendar Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => window.location.href = '/calendar'}
+            >
+              <CalendarDays className="h-5 w-5" />
+            </Button>
+          </div>
 
           {/* Filters */}
           {showFilters && (
@@ -127,24 +139,24 @@ export function NavBar({
                 {showLeaderDropdown && leaderName && leaderNames.filter(name =>
                   name.toLowerCase().includes(leaderName.toLowerCase())
                 ).length > 0 && (
-                  <div className="absolute top-full left-0 mt-1 w-full bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto z-50">
-                    {leaderNames
-                      .filter(name => name.toLowerCase().includes(leaderName.toLowerCase()))
-                      .slice(0, 10)
-                      .map((name, idx) => (
-                        <div
-                          key={idx}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                          onMouseDown={() => {
-                            onLeaderNameChange?.(name)
-                            setShowLeaderDropdown(false)
-                          }}
-                        >
-                          {name}
-                        </div>
-                      ))}
-                  </div>
-                )}
+                    <div className="absolute top-full left-0 mt-1 w-full bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto z-50">
+                      {leaderNames
+                        .filter(name => name.toLowerCase().includes(leaderName.toLowerCase()))
+                        .slice(0, 10)
+                        .map((name, idx) => (
+                          <div
+                            key={idx}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                            onMouseDown={() => {
+                              onLeaderNameChange?.(name)
+                              setShowLeaderDropdown(false)
+                            }}
+                          >
+                            {name}
+                          </div>
+                        ))}
+                    </div>
+                  )}
               </div>
               <Button
                 variant="outline"
